@@ -1,7 +1,7 @@
 export namespace MapModel {
 
     export interface Map {
-        
+
     }
     export interface SMF {
         magic: string;

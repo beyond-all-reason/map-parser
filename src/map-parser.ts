@@ -1,11 +1,11 @@
-import * as path from "path";
 import { promises as fs } from "fs";
-import { extractFull } from "node-7z";
-import { MapModel } from "./map-model";
 import { glob } from "glob";
+import { extractFull } from "node-7z";
+import * as path from "path";
+import sharp from "sharp";
+
 import { BufferStream } from "./buffer-stream";
-import * as jpeg from "jpeg-js";
-import sharp, { Metadata } from "sharp";
+import { MapModel } from "./map-model";
 const dxt = require("dxt-js");
 
 export class MapParser {
@@ -17,12 +17,12 @@ export class MapParser {
 
         try {
             const fileType = path.extname(filePath);
-            if (fileType === ".sd7"){
+            if (fileType === ".sd7") {
                 const archive = await this.extractSd7(filePath);
                 this.smf = await this.parseSmf(await fs.readFile(archive.smf));
                 const smt = await this.parseSmt(await fs.readFile(archive.smt));
             }
-        } catch(err) {
+        } catch (err) {
             console.error(err);
         } finally {
             await fs.rmdir(this.tmpDir, { recursive: true } );
@@ -72,7 +72,7 @@ export class MapParser {
         const startPositionsGroups = str.matchAll(/\s*\[(\d)\]\s?\=\s?\{startPos\s?\=\s?\{x\s?\=\s?(\d*)\,\s?z\s?\=\s?(\d*)\}\}\,\s*/gm);
         const startPositionsArray = Array.from(startPositionsGroups).map(matches => matches.slice(1, 4).map(num => parseInt(num)));
         const startPositions: { [key: number]: { x: number, z: number } } = {};
-        for (const [teamId, x, z] of startPositionsArray){
+        for (const [teamId, x, z] of startPositionsArray) {
             startPositions[teamId] = { x, z };
         }
 
@@ -84,7 +84,7 @@ export class MapParser {
 
     protected async parseSmf(buffer: Buffer) : Promise<MapModel.SMF> {
         let bufferStream = new BufferStream(buffer);
-        
+
         const magic = bufferStream.readString(16);
         const version = bufferStream.readInt();
         const id = bufferStream.readInt(4, true);
@@ -139,10 +139,10 @@ export class MapParser {
             typeMapIndex, tileIndex, miniMapIndex, metalMapIndex, featuresMapIndex, noOfExtraHeades
         };
     }
-    
+
     protected async parseSmt(buffer: Buffer, mipmapSize: 32 | 16 | 8 | 4 = 4) {
         const bufferStream = new BufferStream(buffer);
-        
+
         const magic = bufferStream.readString(16);
         const version = bufferStream.readInt();
         const numOftiles = bufferStream.readInt();
@@ -154,18 +154,18 @@ export class MapParser {
 
         await fs.mkdir("tiles", { recursive: true });
 
-        for (let smuX=0; smuX<this.smf.widthUnits; smuX++){
-            for (let smuY=0; smuY<this.smf.heightUnits; smuY++){
+        for (let smuX=0; smuX<this.smf.widthUnits; smuX++) {
+            for (let smuY=0; smuY<this.smf.heightUnits; smuY++) {
                 let tile: Buffer[][] = [];
-                for (let x=0; x<tileSize; x++){
+                for (let x=0; x<tileSize; x++) {
                     const col: Buffer[][] = [];
-                    for (let y=0; y<tileSize; y++){
+                    for (let y=0; y<tileSize; y++) {
                         const mipmap = bufferStream.read(680);
                         const dxt1 = mipmap.slice(startIndex, startIndex + dxt1Size);
                         const rgbaArray: Uint8Array = dxt.decompress(dxt1, mipmapSize, mipmapSize, dxt.flags.DXT1);
                         const rgbaBuffer = Buffer.from(rgbaArray);
                         let pixels = this.rgbaBufferToPixels(rgbaBuffer, mipmapSize);
-                        if (this.isTileEmpty(pixels)){
+                        if (this.isTileEmpty(pixels)) {
                             console.log("Empty tile detected, ignoring");
                             y -= 1;
                             continue;
@@ -187,9 +187,9 @@ export class MapParser {
     protected rgbaBufferToPixels(buffer: Buffer, mipmapSize: 32 | 16 | 8 | 4) : Buffer[][] {
         const bufferStream = new BufferStream(buffer);
         const pixels: Buffer[][] = [];
-        for (let y=0; y<mipmapSize; y++){
+        for (let y=0; y<mipmapSize; y++) {
             const row: Buffer[] = [];
-            for (let x=0; x<mipmapSize; x++){
+            for (let x=0; x<mipmapSize; x++) {
                 row.push(bufferStream.read(4));
             }
             pixels.push(row);
@@ -203,8 +203,8 @@ export class MapParser {
 
     protected mergeRight<T>(a: T[][], b: T[][]) : T[][] {
         const out: T[][] = [];
-        for (let row=0; row<b.length; row++){
-            if (a[row]){
+        for (let row=0; row<b.length; row++) {
+            if (a[row]) {
                 out.push(a[row].concat(b[row]));
             } else {
                 out.push(b[row]);
@@ -214,10 +214,10 @@ export class MapParser {
     }
 
     protected isTileEmpty(pixels: Buffer[][]) : boolean {
-        for (let row of pixels){
-            for (let pixel of row){
+        for (let row of pixels) {
+            for (let pixel of row) {
                 const pixelIsBlack = pixel[0] === 0x00 && pixel[1] === 0x00 && pixel[2] === 0x00 && pixel[3] === 0xFF;
-                if (!pixelIsBlack){
+                if (!pixelIsBlack) {
                     return false;
                 }
             }
@@ -228,8 +228,8 @@ export class MapParser {
 
     protected async stitchFinalMapTexture(mipmapSize: 32 | 16 | 8 | 4, tilesDir: string, outPath: string) {
         let files: Array<{ x: number; y: number }> = [];
-        for (let x=0; x<this.smf.widthUnits; x++){
-            for (let y=0; y<this.smf.heightUnits; y++){
+        for (let x=0; x<this.smf.widthUnits; x++) {
+            for (let y=0; y<this.smf.heightUnits; y++) {
                 files.push({ x, y });
             }
         }
