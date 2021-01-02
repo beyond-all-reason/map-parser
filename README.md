@@ -1,25 +1,12 @@
-# .sdfz Demo Parser
-Parser for SpringRTS .sdfz demo files
+# Spring Map Parser
+Parser for SpringRTS .sd7, .smf, .smt map files
 
 ## Usage
 
-`npm i --save sdfz-demo-parser`
+`npm i --save spring-map-parser`
 
 ```
-import { ungzip } from "node-gzip";
-import { promises as fs } from "fs";
-
-import { DemoParser } from "sdfz-demo-parser";
-
-(async () => {
-    const demoPath = "./example/20201219_003920_Altored Divide Bar Remake 1_104.0.1-1707-gc0fc18e BAR.sdfz";
-    const sdfz = await fs.readFile(demoPath);
-    const sdf = await ungzip(sdfz);
-
-    const parser = new DemoParser();
-
-    const demo = parser.parseDemo(sdf);
-
-    console.log(demo.script.spectators[1].name); // [Fx]Jazcash
-})();
+import { MapParser } from "spring-map-parser";
+const parser = new MapParser();
+const map = await parser.parseMap("dsdr_3.98");
 ```

@@ -179,7 +179,7 @@ export class MapParser {
             }
         }
 
-        await this.stitchFinalMapTexture("tiles", mipmapSize);
+        await this.stitchFinalMapTexture(mipmapSize, "tiles", "texture.png");
 
         console.log("done");
     }
@@ -226,7 +226,7 @@ export class MapParser {
         return true;
     }
 
-    protected async stitchFinalMapTexture(tilesDir: string, mipmapSize: 32 | 16 | 8 | 4) {
+    protected async stitchFinalMapTexture(mipmapSize: 32 | 16 | 8 | 4, tilesDir: string, outPath: string) {
         let files: Array<{ x: number; y: number }> = [];
         for (let x=0; x<this.meta.widthUnits; x++){
             for (let y=0; y<this.meta.heightUnits; y++){
@@ -234,21 +234,20 @@ export class MapParser {
             }
         }
 
-        
-
-        // return await sharp({
-        //     raw: {
-        //         width: (mipmapSize * 32) * this.meta.widthUnits,
-        //         height: (mipmapSize * 32) * this.meta.heightUnits,
-        //         channels: 4
-        //     }
-        // }).composite(files.map(file => {
-        //     return {
-        //         input: `${tilesDir}/${file.x}_${file.y}.png`,
-        //         raw: { width: (mipmapSize * 32), height: (mipmapSize * 32), channels: 4 as 4 },
-        //         top: file.y * (mipmapSize * 32),
-        //         left: file.x * (mipmapSize * 32)
-        //     };
-        // })).toFile("big.png");
+        return await sharp({
+            create: {
+                width: (mipmapSize * 32) * this.meta.widthUnits,
+                height: (mipmapSize * 32) * this.meta.heightUnits,
+                background: { r: 0, g: 0, b: 0, alpha: 255 },
+                channels: 4
+            },
+        }).composite(files.map(file => {
+            return {
+                input: `${tilesDir}/${file.x}_${file.y}.png`,
+                raw: { width: (mipmapSize * 32), height: (mipmapSize * 32), channels: 4 as 4 },
+                top: file.y * (mipmapSize * 32),
+                left: file.x * (mipmapSize * 32)
+            };
+        })).toFile(outPath);
     }
 }
