@@ -1,27 +1,43 @@
 export namespace MapModel {
 
     export interface Map {
-
+        meta: Meta;
     }
-    export interface SMF {
+
+    export interface Info {
+        name: string;
+        shortname: string;
+        description: string;
+        author: string;
+        version: string;
+        mapfile: string;
+        modtype: number;
+        maphardness: number;
+        notDeformable: boolean;
+        gravity: number;
+        tidalStrength: number;
+        maxMetal: number;
+        extractorRadius: number;
+        voidWater: boolean;
+        voidGround: boolean;
+        autoShowMetal: boolean;
+        minWind: number;
+        maxWind: number;
+        startPositions: Array<{ x: number, z: number }>;
+    }
+
+    export interface Meta {
         magic: string;
         version: number;
         id: number;
-        widthPixels: number;
+        mapWidth: number;
         widthUnits: number;
-        heightPixels: number;
+        mapHeight: number;
         heightUnits: number;
         squareSize: number;
         texelsPerSquare: number;
         tileSize: number;
-        minHeight: number;
-        maxHeight: number;
-        heightMapIndex: number;
-        typeMapIndex: number;
-        tileIndex: number;
-        miniMapIndex: number;
-        metalMapIndex: number;
-        featuresMapIndex: number;
-        noOfExtraHeades: number;
+        minDepth: number;
+        maxDepth: number;
     }
 }

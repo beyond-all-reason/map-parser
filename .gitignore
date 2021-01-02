@@ -2,3 +2,4 @@ dist
 node_modules
 /working-files
 /tiles
+/out.png

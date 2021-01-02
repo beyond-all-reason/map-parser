@@ -10,9 +10,23 @@ const dxt = require("dxt-js");
 
 // https://github.com/spring/spring/tree/develop/rts/Map
 
+export interface MapParserConfig {
+    verbose?: boolean;
+}
+
 export class MapParser {
     protected tmpDir: string = "";
-    protected smf!: MapModel.SMF;
+    protected meta!: MapModel.Meta;
+
+    constructor() {
+        process.on("SIGINT", async () => {
+            console.log("\ngracefully shutting down from SIGINT (Crtl-C)");
+            if (this.tmpDir){
+                await fs.rmdir(this.tmpDir, { recursive: true } );
+            }
+            process.exit();
+        });
+    }
 
     public async parseMap(filePath: string) : Promise<MapModel.Map> {
         let map: Partial<MapModel.Map> = {};
@@ -21,8 +35,8 @@ export class MapParser {
             const fileType = path.extname(filePath);
             if (fileType === ".sd7") {
                 const archive = await this.extractSd7(filePath);
-                this.smf = await this.parseSmf(await fs.readFile(archive.smf));
-                //const smt = await this.parseSmt(await fs.readFile(archive.smt));
+                this.meta = await this.parseSmf(await fs.readFile(archive.smf));
+                const smt = await this.parseSmt(await fs.readFile(archive.smt));
             }
         } catch (err) {
             console.error(err);
@@ -47,7 +61,7 @@ export class MapParser {
         });
     }
 
-    protected async parseMapInfo(buffer: Buffer) : Promise<MapModel.Map> {
+    protected async parseMapInfo(buffer: Buffer) : Promise<MapModel.Info> {
         const str = buffer.toString();
 
         // yes, all this regex is messy and expensive. no, i don't care
@@ -73,7 +87,7 @@ export class MapParser {
 
         const startPositionsGroups = str.matchAll(/\s*\[(\d)\]\s?\=\s?\{startPos\s?\=\s?\{x\s?\=\s?(\d*)\,\s?z\s?\=\s?(\d*)\}\}\,\s*/gm);
         const startPositionsArray = Array.from(startPositionsGroups).map(matches => matches.slice(1, 4).map(num => parseInt(num)));
-        const startPositions: { [key: number]: { x: number, z: number } } = {};
+        const startPositions: Array<{ x: number, z: number }> = [];
         for (const [teamId, x, z] of startPositionsArray) {
             startPositions[teamId] = { x, z };
         }
@@ -84,30 +98,28 @@ export class MapParser {
         };
     }
 
-    protected async parseSmf(buffer: Buffer) : Promise<MapModel.SMF> {
+    protected async parseSmf(buffer: Buffer) : Promise<MapModel.Meta> {
         let bufferStream = new BufferStream(buffer);
 
         const magic = bufferStream.readString(16);
         const version = bufferStream.readInt();
         const id = bufferStream.readInt(4, true);
-        const widthPixels = bufferStream.readInt();
-        const heightPixels = bufferStream.readInt();
-        const widthUnits = widthPixels / 128;
-        const heightUnits = heightPixels / 128;
+        const mapWidth = bufferStream.readInt();
+        const mapHeight = bufferStream.readInt();
+        const widthUnits = mapWidth / 128;
+        const heightUnits = mapHeight / 128;
         const squareSize = bufferStream.readInt();
         const texelsPerSquare = bufferStream.readInt();
         const tileSize = bufferStream.readInt();
-        const minHeight = bufferStream.readFloat();
-        const maxHeight = bufferStream.readFloat();
+        const minDepth = bufferStream.readFloat();
+        const maxDepth = bufferStream.readFloat();
         const heightMapIndex = bufferStream.readInt();
         const typeMapIndex = bufferStream.readInt();
         const tileIndex = bufferStream.readInt();
         const miniMapIndex = bufferStream.readInt();
         const metalMapIndex = bufferStream.readInt();
-        const featuresMapIndex = bufferStream.readInt();
+        const featureMapIndex = bufferStream.readInt();
         const noOfExtraHeaders = bufferStream.readInt();
-
-        console.log({ heightMapIndex, typeMapIndex, miniMapIndex, tileIndex, metalMapIndex, featuresMapIndex, noOfExtraHeaders });
 
         // for (let i=0; i<noOfExtraHeaders; i++){
         //     const extraHeaderSize = bufferStream.readInt();
@@ -119,83 +131,23 @@ export class MapParser {
         //     }
         // }
 
-        const heightMapLength = ((widthPixels + 1) * (heightPixels + 1)) * 2;
-        const heightMapBuffer = buffer.slice(heightMapIndex, heightMapIndex + heightMapLength);
-        const heightMap = new BufferStream(heightMapBuffer).readInts(heightMapBuffer.length / 2, 2, true);
+        // const heightMapBuffer = buffer.slice(heightMapIndex, typeMapIndex);
+        // await (await this.heightMapToImage(heightMapBuffer, mapWidth, mapHeight)).toFile("out.png");
+        // const relativeHeightMap = this.getRelativeHeightmap(heightMapBuffer, mapWidth, mapHeight, minDepth, maxDepth);
 
-        console.log(heightMap.length);
+        // const typeMapBuffer = buffer.slice(typeMapIndex, miniMapIndex);
+        // await (await this.typeMapToImage(typeMapBuffer, mapWidth, mapHeight)).toFile("out.png");
 
-        const typeMapLength = ((widthPixels / 2) * (heightPixels / 2));
-        const typeMapBuffer = buffer.slice(typeMapIndex, typeMapIndex + typeMapLength);
+        // const minimapBuffer = buffer.slice(miniMapIndex, metalMapIndex);
+        // await (await this.minimapToImage(minimapBuffer)).toFile("out.png");
 
-        const minimapLength = 699048;
-        const minimapBuffer = buffer.slice(miniMapIndex, miniMapIndex + minimapLength);
+        // const metalMapBuffer = buffer.slice(metalMapIndex, tileIndex);
+        // await (await this.typeMapToImage(metalMapBuffer, mapWidth, mapHeight)).toFile("out.png");
 
-        const metalMapLength = ((widthPixels / 2) * (heightPixels / 2));
-        const metalMapBuffer = buffer.slice(metalMapIndex, metalMapIndex + metalMapLength);
+        // const featuresBuffer = buffer.slice(featureMapIndex + 8);
+        // const features: string[] = featuresBuffer.toString().split("\u0000").filter(Boolean);
 
-        // const numOfTileFiles = bufferStream.readInt();
-        // const totalNumOfTilesInAllFiles = bufferStream.readInt();
-
-        // const tileIndexLength = ((widthPixels / 4) * (heightPixels / 4));
-        // const tileIndexes = buffer.slice(tileIndex, tileIndex + tileIndexLength);
-
-        //console.log(numOfTileFiles, totalNumOfTilesInAllFiles, smtTileIndexLength, smtTileIndexes.length)
-
-        return {} as any;
-
-        bufferStream.read(1); // null
-
-        // not sure what these refer to
-        const notSure1 = bufferStream.readInt(); // 61376
-        const notSure2 = bufferStream.readInt(); // 61408
-        const notSure3 = bufferStream.readInt(); // 61440
-
-        const numOfFeatures = bufferStream.readInt();
-        const numOfFeatureTypes = bufferStream.readInt();
-
-        const featureNames: string[] = [];
-        for (let i=0; i<numOfFeatures; i++){
-            const featureName = bufferStream.readUntilNull().toString();
-            featureNames.push(featureName);
-        }
-
-        console.log(featureNames);
-        console.log(bufferStream.read());
-
-        // // convert height units to ingame Y positions
-        // const heightMap = buffer.slice(heightMapIndex, typeMapIndex);
-        // const heightMapBs = new BufferStream(heightMap);
-        // const heightUnit = (maxHeight - minHeight) / 65536;
-        // const heights: number[][] = [];
-        // for (let y=0; y<height+1; y++) {
-        //     const row: number[] = [];
-        //     for (let x=0; x<width+1; x++){
-        //         const rawHeight = heightMapBs.readInt(2, true);
-        //         const height = Math.round(((heightUnit * rawHeight) + minHeight));
-        //         row.push(height);
-        //     }
-        //     heights.push(row);
-        // }
-
-        // // extract minimap and resize
-        // const miniMap = buffer.slice(miniMapIndex, metalMapIndex);
-        // const rgbaArray: Uint8Array = dxt.decompress(miniMap, 1024, 1024, dxt.flags.DXT1);
-        // const rgbaBuffer = Buffer.from(rgbaArray);
-        // await sharp(rgbaBuffer, {
-        //         raw: {
-        //             width: 1024,
-        //             height: 1024,
-        //             channels: 4,
-        //         }
-        //     })
-        //     .resize(width, height)
-        //     .toFile("test.jpg");
-
-        return {
-            magic, version, id, widthPixels, widthUnits, heightPixels, heightUnits, squareSize, texelsPerSquare, tileSize, minHeight, maxHeight, heightMapIndex,
-            typeMapIndex, tileIndex, miniMapIndex, metalMapIndex, featuresMapIndex, noOfExtraHeades: noOfExtraHeaders
-        };
+        return { magic, version, id, mapWidth, widthUnits, mapHeight, heightUnits, squareSize, texelsPerSquare, tileSize, minDepth, maxDepth };
     }
 
     protected async parseSmt(buffer: Buffer, mipmapSize: 32 | 16 | 8 | 4 = 4) {
@@ -207,13 +159,15 @@ export class MapParser {
         const tileSize = bufferStream.readInt();
         const compressionType = bufferStream.readInt();
 
+        console.log(numOftiles, tileSize, compressionType);
+
         const startIndex = mipmapSize === 32 ? 0 : mipmapSize === 16 ? 512 : mipmapSize === 8 ? 640 : 672;
         const dxt1Size = Math.pow(mipmapSize, 2) / 2;
 
         await fs.mkdir("tiles", { recursive: true });
 
-        for (let smuX=0; smuX<this.smf.widthUnits; smuX++) {
-            for (let smuY=0; smuY<this.smf.heightUnits; smuY++) {
+        for (let smuX=0; smuX<this.meta.widthUnits; smuX++) {
+            for (let smuY=0; smuY<this.meta.heightUnits; smuY++) {
                 let tile: Buffer[][] = [];
                 for (let x=0; x<tileSize; x++) {
                     const col: Buffer[][] = [];
@@ -238,8 +192,6 @@ export class MapParser {
         }
 
         await this.stitchFinalMapTexture(mipmapSize, "tiles", "texture.png");
-
-        console.log("done");
     }
 
     protected rgbaBufferToPixels(buffer: Buffer, mipmapSize: 32 | 16 | 8 | 4) : Buffer[][] {
@@ -286,16 +238,16 @@ export class MapParser {
 
     protected async stitchFinalMapTexture(mipmapSize: 32 | 16 | 8 | 4, tilesDir: string, outPath: string) {
         let files: Array<{ x: number; y: number }> = [];
-        for (let x=0; x<this.smf.widthUnits; x++) {
-            for (let y=0; y<this.smf.heightUnits; y++) {
+        for (let x=0; x<this.meta.widthUnits; x++) {
+            for (let y=0; y<this.meta.heightUnits; y++) {
                 files.push({ x, y });
             }
         }
 
         return await sharp({
             create: {
-                width: (mipmapSize * 32) * this.smf.widthUnits,
-                height: (mipmapSize * 32) * this.smf.heightUnits,
+                width: (mipmapSize * 32) * this.meta.widthUnits,
+                height: (mipmapSize * 32) * this.meta.heightUnits,
                 background: { r: 0, g: 0, b: 0, alpha: 255 },
                 channels: 4
             },
@@ -307,5 +259,52 @@ export class MapParser {
                 left: file.x * (mipmapSize * 32)
             };
         })).toFile(outPath);
+    }
+
+    protected getRelativeHeightmap(heightMapBuffer: Buffer, mapWidth: number, mapHeight: number, minDepth: number, maxDepth: number) : number[][] {
+        const bufferStream = new BufferStream(heightMapBuffer);
+        const heightUnit = (maxDepth - minDepth) / 65536;
+        const heights: number[][] = [];
+        for (let y=0; y<mapHeight+1; y++) {
+            const row: number[] = [];
+            for (let x=0; x<mapWidth+1; x++){
+                const rawHeight = bufferStream.readInt(2, true);
+                const height = Math.round(((heightUnit * rawHeight) + minDepth));
+                row.push(height);
+            }
+            heights.push(row);
+        }
+        
+        return heights;
+    }
+
+    protected async heightMapToImage(heightMapBuffer: Buffer, mapWidth: number, mapHeight: number) {
+        const ints = new BufferStream(heightMapBuffer).readInts(heightMapBuffer.length / 2, 2, true);
+        const test = ints.map(int => { return (int / 65536) * 255 });
+
+        return await sharp(Buffer.from(test), {
+            raw: { width: mapWidth + 1, height: mapHeight + 1, channels: 1 },
+        });
+    }
+
+    protected async typeMapToImage(typeMapBuffer: Buffer, mapWidth: number, mapHeight: number) {
+        return await sharp(typeMapBuffer, {
+            raw: { width: mapWidth / 2, height: mapHeight / 2, channels: 1 }
+        });
+    }
+
+    protected async minimapToImage(miniMapBuffer: Buffer) {
+        const rgbaArray: Uint8Array = dxt.decompress(miniMapBuffer, 1024, 1024, dxt.flags.DXT1);
+        const rgbaBuffer = Buffer.from(rgbaArray);
+
+        return await sharp(rgbaBuffer, {
+            raw: { width: 1024, height: 1024, channels: 4 }
+        });
+    }
+
+    protected async metalMapToImage(metalMapBuffer: Buffer, mapWidth: number, mapHeight: number) {
+        return await sharp(metalMapBuffer, {
+            raw: { width: mapWidth / 2, height: mapHeight / 2, channels: 1 }
+        });
     }
 }
