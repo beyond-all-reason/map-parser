@@ -10,7 +10,7 @@ const dxt = require("dxt-js");
 
 export class MapParser {
     protected tmpDir: string = "";
-    protected meta!: MapModel.Meta;
+    protected smf!: MapModel.SMF;
 
     public async parseMap(filePath: string) : Promise<MapModel.Map> {
         let map: Partial<MapModel.Map> = {};
@@ -19,7 +19,7 @@ export class MapParser {
             const fileType = path.extname(filePath);
             if (fileType === ".sd7"){
                 const archive = await this.extractSd7(filePath);
-                this.meta = await this.parseSmf(await fs.readFile(archive.smf));
+                this.smf = await this.parseSmf(await fs.readFile(archive.smf));
                 const smt = await this.parseSmt(await fs.readFile(archive.smt));
             }
         } catch(err) {
@@ -82,7 +82,7 @@ export class MapParser {
         };
     }
 
-    protected async parseSmf(buffer: Buffer) {
+    protected async parseSmf(buffer: Buffer) : Promise<MapModel.SMF> {
         let bufferStream = new BufferStream(buffer);
         
         const magic = bufferStream.readString(16);
@@ -154,8 +154,8 @@ export class MapParser {
 
         await fs.mkdir("tiles", { recursive: true });
 
-        for (let smuX=0; smuX<this.meta.widthUnits; smuX++){
-            for (let smuY=0; smuY<this.meta.heightUnits; smuY++){
+        for (let smuX=0; smuX<this.smf.widthUnits; smuX++){
+            for (let smuY=0; smuY<this.smf.heightUnits; smuY++){
                 let tile: Buffer[][] = [];
                 for (let x=0; x<tileSize; x++){
                     const col: Buffer[][] = [];
@@ -228,16 +228,16 @@ export class MapParser {
 
     protected async stitchFinalMapTexture(mipmapSize: 32 | 16 | 8 | 4, tilesDir: string, outPath: string) {
         let files: Array<{ x: number; y: number }> = [];
-        for (let x=0; x<this.meta.widthUnits; x++){
-            for (let y=0; y<this.meta.heightUnits; y++){
+        for (let x=0; x<this.smf.widthUnits; x++){
+            for (let y=0; y<this.smf.heightUnits; y++){
                 files.push({ x, y });
             }
         }
 
         return await sharp({
             create: {
-                width: (mipmapSize * 32) * this.meta.widthUnits,
-                height: (mipmapSize * 32) * this.meta.heightUnits,
+                width: (mipmapSize * 32) * this.smf.widthUnits,
+                height: (mipmapSize * 32) * this.smf.heightUnits,
                 background: { r: 0, g: 0, b: 0, alpha: 255 },
                 channels: 4
             },
