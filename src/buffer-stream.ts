@@ -4,12 +4,17 @@ export class BufferStream {
     public readStream: Readable;
     public isBigEndian: boolean;
 
+    protected currentIndex: number = 0;
+    protected bufferLength: number;
+
     constructor(buffer: Buffer, isBigEndian = false) {
         this.isBigEndian = isBigEndian;
 
         this.readStream = new Readable();
         this.readStream.push(buffer);
         this.readStream.push(null);
+
+        this.bufferLength = buffer.length;
     }
 
     public readString(size?: number, trimNulls = true) {
@@ -67,6 +72,17 @@ export class BufferStream {
         }
     }
 
+    public readNulls() : number {
+        let currentByte = this.read(1)[0];
+        let count = 0;
+        while (currentByte === 0x00) {
+            currentByte = this.read(1)[0];
+            count++;
+        }
+
+        return count;
+    }
+
     public readIntFloatPairs() : number[][] {
         const options: number[][] = [];
         const size = this.readStream.readableLength / 8;
@@ -84,10 +100,15 @@ export class BufferStream {
     }
 
     public read(size?: number) {
+        this.currentIndex = size === undefined ? this.bufferLength : this.currentIndex + size;
         return this.readStream.read(size) as Buffer;
     }
 
     public destroy() {
         this.readStream.destroy();
+    }
+
+    public getPosition() {
+        return this.currentIndex;
     }
 }

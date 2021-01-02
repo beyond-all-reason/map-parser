@@ -8,6 +8,8 @@ import { BufferStream } from "./buffer-stream";
 import { MapModel } from "./map-model";
 const dxt = require("dxt-js");
 
+// https://github.com/spring/spring/tree/develop/rts/Map
+
 export class MapParser {
     protected tmpDir: string = "";
     protected smf!: MapModel.SMF;
@@ -20,7 +22,7 @@ export class MapParser {
             if (fileType === ".sd7") {
                 const archive = await this.extractSd7(filePath);
                 this.smf = await this.parseSmf(await fs.readFile(archive.smf));
-                const smt = await this.parseSmt(await fs.readFile(archive.smt));
+                //const smt = await this.parseSmt(await fs.readFile(archive.smt));
             }
         } catch (err) {
             console.error(err);
@@ -103,7 +105,63 @@ export class MapParser {
         const miniMapIndex = bufferStream.readInt();
         const metalMapIndex = bufferStream.readInt();
         const featuresMapIndex = bufferStream.readInt();
-        const noOfExtraHeades = bufferStream.readInt();
+        const noOfExtraHeaders = bufferStream.readInt();
+
+        console.log({ heightMapIndex, typeMapIndex, miniMapIndex, tileIndex, metalMapIndex, featuresMapIndex, noOfExtraHeaders });
+
+        // for (let i=0; i<noOfExtraHeaders; i++){
+        //     const extraHeaderSize = bufferStream.readInt();
+        //     const extraHeaderType = bufferStream.readInt();
+        //     if (extraHeaderType === 1) { // grass
+        //         const extraOffset = bufferStream.readInt();
+        //         const grassMapLength = (widthPixels / 4) * (heightPixels / 4);
+        //         const grassMap = bufferStream.read(grassMapLength);
+        //     }
+        // }
+
+        const heightMapLength = ((widthPixels + 1) * (heightPixels + 1)) * 2;
+        const heightMapBuffer = buffer.slice(heightMapIndex, heightMapIndex + heightMapLength);
+        const heightMap = new BufferStream(heightMapBuffer).readInts(heightMapBuffer.length / 2, 2, true);
+
+        console.log(heightMap.length);
+
+        const typeMapLength = ((widthPixels / 2) * (heightPixels / 2));
+        const typeMapBuffer = buffer.slice(typeMapIndex, typeMapIndex + typeMapLength);
+
+        const minimapLength = 699048;
+        const minimapBuffer = buffer.slice(miniMapIndex, miniMapIndex + minimapLength);
+
+        const metalMapLength = ((widthPixels / 2) * (heightPixels / 2));
+        const metalMapBuffer = buffer.slice(metalMapIndex, metalMapIndex + metalMapLength);
+
+        // const numOfTileFiles = bufferStream.readInt();
+        // const totalNumOfTilesInAllFiles = bufferStream.readInt();
+
+        // const tileIndexLength = ((widthPixels / 4) * (heightPixels / 4));
+        // const tileIndexes = buffer.slice(tileIndex, tileIndex + tileIndexLength);
+
+        //console.log(numOfTileFiles, totalNumOfTilesInAllFiles, smtTileIndexLength, smtTileIndexes.length)
+
+        return {} as any;
+
+        bufferStream.read(1); // null
+
+        // not sure what these refer to
+        const notSure1 = bufferStream.readInt(); // 61376
+        const notSure2 = bufferStream.readInt(); // 61408
+        const notSure3 = bufferStream.readInt(); // 61440
+
+        const numOfFeatures = bufferStream.readInt();
+        const numOfFeatureTypes = bufferStream.readInt();
+
+        const featureNames: string[] = [];
+        for (let i=0; i<numOfFeatures; i++){
+            const featureName = bufferStream.readUntilNull().toString();
+            featureNames.push(featureName);
+        }
+
+        console.log(featureNames);
+        console.log(bufferStream.read());
 
         // // convert height units to ingame Y positions
         // const heightMap = buffer.slice(heightMapIndex, typeMapIndex);
@@ -136,7 +194,7 @@ export class MapParser {
 
         return {
             magic, version, id, widthPixels, widthUnits, heightPixels, heightUnits, squareSize, texelsPerSquare, tileSize, minHeight, maxHeight, heightMapIndex,
-            typeMapIndex, tileIndex, miniMapIndex, metalMapIndex, featuresMapIndex, noOfExtraHeades
+            typeMapIndex, tileIndex, miniMapIndex, metalMapIndex, featuresMapIndex, noOfExtraHeades: noOfExtraHeaders
         };
     }
 
