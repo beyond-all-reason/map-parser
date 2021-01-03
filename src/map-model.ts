@@ -1,6 +1,6 @@
 export namespace MapModel {
-
     export interface Map {
+        info: Info;
         meta: Meta;
     }
 
@@ -25,7 +25,6 @@ export namespace MapModel {
         maxWind: number;
         startPositions: Array<{ x: number, z: number }>;
     }
-
     export interface Meta {
         magic: string;
         version: number;
@@ -39,5 +38,9 @@ export namespace MapModel {
         tileSize: number;
         minDepth: number;
         maxDepth: number;
+    }
+
+    export interface SMTHeader {
+
     }
 }

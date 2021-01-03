@@ -2,6 +2,7 @@ import { promises as fs } from "fs";
 import { glob } from "glob";
 import { extractFull } from "node-7z";
 import * as path from "path";
+import * as os from "os";
 import sharp from "sharp";
 
 import { BufferStream } from "./buffer-stream";
@@ -14,43 +15,147 @@ export interface MapParserConfig {
     verbose?: boolean;
 }
 
-export class MapParser {
-    protected tmpDir: string = "";
-    protected meta!: MapModel.Meta;
+const mapParserDefaultConfig: Partial<MapParserConfig> = {
+    verbose: false
+};
 
-    constructor() {
-        process.on("SIGINT", async () => {
-            console.log("\ngracefully shutting down from SIGINT (Crtl-C)");
-            if (this.tmpDir){
-                await fs.rmdir(this.tmpDir, { recursive: true } );
+export class MapParser {
+    protected config: MapParserConfig;
+    protected filePath: string;
+    protected tmpDir: string;
+    protected meta?: MapModel.Meta;
+    protected info?: MapModel.Info;
+    protected smfHeader?: MapModel.Meta;
+
+    constructor(filePath: string, config?: MapParserConfig) {
+        this.config = Object.assign({}, mapParserDefaultConfig, config);
+
+        this.filePath = filePath;
+
+        this.tmpDir = path.join(os.tmpdir(), path.basename(this.filePath));
+
+        process.on("SIGINT", async () => this.sigint());
+    }
+
+    public async parseMap() : Promise<{ info: MapModel.Info, meta: MapModel.Meta}> {
+        await this.preParse();
+
+        return {
+            info: this.info!,
+            meta: this.meta!
+        };
+    }
+
+    public async destroy() {
+        await fs.rmdir(this.tmpDir, { recursive: true });
+    }
+
+    public async getMapTexture(mipmapSize: 32 | 16 | 8 | 4, tilesDir: string, outPath: string) {
+        let files: Array<{ x: number; y: number }> = [];
+        for (let x = 0; x < this.meta!.widthUnits; x++) {
+            for (let y = 0; y < this.meta!.heightUnits; y++) {
+                files.push({ x, y });
             }
-            process.exit();
+        }
+
+        return await sharp({
+            create: {
+                width: (mipmapSize * 32) * this.meta!.widthUnits,
+                height: (mipmapSize * 32) * this.meta!.heightUnits,
+                background: { r: 0, g: 0, b: 0, alpha: 255 },
+                channels: 4
+            },
+        }).composite(files.map(file => {
+            return {
+                input: `${tilesDir}/${file.x}_${file.y}.png`,
+                raw: { width: (mipmapSize * 32), height: (mipmapSize * 32), channels: 4 as 4 },
+                top: file.y * (mipmapSize * 32),
+                left: file.x * (mipmapSize * 32)
+            };
+        })).toFile(outPath);
+    }
+
+    public getRelativeHeightmap(heightMapBuffer: Buffer, mapWidth: number, mapHeight: number, minDepth: number, maxDepth: number): number[][] {
+        const bufferStream = new BufferStream(heightMapBuffer);
+        const heightUnit = (maxDepth - minDepth) / 65536;
+        const heights: number[][] = [];
+        for (let y = 0; y < mapHeight + 1; y++) {
+            const row: number[] = [];
+            for (let x = 0; x < mapWidth + 1; x++) {
+                const rawHeight = bufferStream.readInt(2, true);
+                const height = Math.round(((heightUnit * rawHeight) + minDepth));
+                row.push(height);
+            }
+            heights.push(row);
+        }
+
+        return heights;
+    }
+
+    public async parseHeightMap(heightMapBuffer: Buffer, mapWidth: number, mapHeight: number) {
+        const ints = new BufferStream(heightMapBuffer).readInts(heightMapBuffer.length / 2, 2, true);
+        const test = ints.map(int => { return (int / 65536) * 255 });
+
+        return await sharp(Buffer.from(test), {
+            raw: { width: mapWidth + 1, height: mapHeight + 1, channels: 1 },
         });
     }
 
-    public async parseMap(filePath: string) : Promise<MapModel.Map> {
-        let map: Partial<MapModel.Map> = {};
+    public async parseTypeMap(typeMapBuffer: Buffer, mapWidth: number, mapHeight: number) {
+        return await sharp(typeMapBuffer, {
+            raw: { width: mapWidth / 2, height: mapHeight / 2, channels: 1 }
+        });
+    }
+
+    public async parseMiniMap(miniMapBuffer: Buffer) {
+        const rgbaArray: Uint8Array = dxt.decompress(miniMapBuffer, 1024, 1024, dxt.flags.DXT1);
+        const rgbaBuffer = Buffer.from(rgbaArray);
+
+        return await sharp(rgbaBuffer, {
+            raw: { width: 1024, height: 1024, channels: 4 }
+        });
+    }
+
+    public async parseMetalMap(metalMapBuffer: Buffer, mapWidth: number, mapHeight: number) {
+        return await sharp(metalMapBuffer, {
+            raw: { width: mapWidth / 2, height: mapHeight / 2, channels: 1 }
+        });
+    }
+
+    protected async preParse() {
+        if (this.meta && this.info){
+            return;
+        }
 
         try {
-            const fileType = path.extname(filePath);
+            const fileType = path.extname(this.filePath);
             if (fileType === ".sd7") {
-                const archive = await this.extractSd7(filePath);
-                this.meta = await this.parseSmf(await fs.readFile(archive.smf));
-                const smt = await this.parseSmt(await fs.readFile(archive.smt));
+                const archiveFiles = await this.extractSd7(this.filePath);
+
+                this.meta = await this.parseSmf(await fs.readFile(archiveFiles.smf));
+
+                if (archiveFiles.mapinfo) {
+                    this.info = await this.parseMapInfo(await fs.readFile(archiveFiles.mapinfo));
+                } else if (archiveFiles.smd) {
+                    this.info = await this.parseSmd(await fs.readFile(archiveFiles.smd));
+                } else {
+                    throw new Error("No mapinfo.lua or .smd files found");
+                }
+                //const smt = await this.parseSmt(await fs.readFile(archive.smt));
+            } else {
+                console.warn(`${fileType} extension not yet supported, .sd7 only for now, sorry!`);
             }
         } catch (err) {
             console.error(err);
         } finally {
-            await fs.rmdir(this.tmpDir, { recursive: true } );
-
-            return {} as any;
+            await this.destroy();
         }
     }
 
-    protected async extractSd7(filePath: string) : Promise<{ smf: string, smt: string, mapinfo?: string }> {
+    protected async extractSd7(filePathIn: string, dirOut = this.tmpDir): Promise<{ smf: string, smt: string, smd?: string, mapinfo?: string }> {
         return new Promise(async resolve => {
-            this.tmpDir = await fs.mkdtemp("tmp");
-            const extractStream = extractFull(filePath, this.tmpDir, { recursive: true, $cherryPick: ["*.smf", "*.smt", "mapinfo.lua"] });
+            await fs.mkdtemp(this.tmpDir);
+            const extractStream = extractFull(filePathIn, this.tmpDir, { recursive: true, $cherryPick: ["*.smf", "*.smt", "mapinfo.lua"] });
             extractStream.on("end", async () => {
                 resolve({
                     smf: glob.sync(`${this.tmpDir}/**/*.smf`)[0],
@@ -61,29 +166,29 @@ export class MapParser {
         });
     }
 
-    protected async parseMapInfo(buffer: Buffer) : Promise<MapModel.Info> {
+    protected async parseMapInfo(buffer: Buffer): Promise<MapModel.Info> {
         const str = buffer.toString();
 
         // yes, all this regex is messy and expensive. no, i don't care
 
-        const name            = str.match(/(?!t).name\s*\=\s*\"(.*?)\"/)?.[1]!;
-        const shortname       = str.match(/shortname\s*\=\s*\"(.*?)\"/)?.[1]!;
-        const description     = str.match(/description\s*\=\s*\"(.*?)\"/)?.[1]!;
-        const author          = str.match(/author\s*\=\s*\"(.*?)\"/)?.[1]!;
-        const version         = str.match(/version\s*\=\s*\"(.*?)\"/)?.[1]!;
-        const mapfile         = str.match(/mapfile\s*\=\s*\"(.*?)\"/)?.[1]!;
-        const modtype         = Number(str.match(/modtype\s*\=\s*(.*?)\,/)?.[1]);
-        const maphardness     = Number(str.match(/maphardness\s*\=\s*(.*?)\,/)?.[1]);
-        const notDeformable   = str.match(/notDeformable\s*\=\s*(.*?)\,/)?.[1] === "true";
-        const gravity         = Number(str.match(/gravity\s*\=\s*(.*?)\,/)?.[1]);
-        const tidalStrength   = Number(str.match(/tidalStrength\s*\=\s*(.*?)\,/)?.[1]);
-        const maxMetal        = Number(str.match(/maxMetal\s*\=\s*(.*?)\,/)?.[1]);
+        const name = str.match(/(?!t).name\s*\=\s*\"(.*?)\"/)?.[1]!;
+        const shortname = str.match(/shortname\s*\=\s*\"(.*?)\"/)?.[1]!;
+        const description = str.match(/description\s*\=\s*\"(.*?)\"/)?.[1]!;
+        const author = str.match(/author\s*\=\s*\"(.*?)\"/)?.[1]!;
+        const version = str.match(/version\s*\=\s*\"(.*?)\"/)?.[1]!;
+        const mapfile = str.match(/mapfile\s*\=\s*\"(.*?)\"/)?.[1]!;
+        const modtype = Number(str.match(/modtype\s*\=\s*(.*?)\,/)?.[1]);
+        const maphardness = Number(str.match(/maphardness\s*\=\s*(.*?)\,/)?.[1]);
+        const notDeformable = str.match(/notDeformable\s*\=\s*(.*?)\,/)?.[1] === "true";
+        const gravity = Number(str.match(/gravity\s*\=\s*(.*?)\,/)?.[1]);
+        const tidalStrength = Number(str.match(/tidalStrength\s*\=\s*(.*?)\,/)?.[1]);
+        const maxMetal = Number(str.match(/maxMetal\s*\=\s*(.*?)\,/)?.[1]);
         const extractorRadius = Number(str.match(/extractorRadius\s*\=\s*(.*?)\,/)?.[1]);
-        const voidWater       = str.match(/voidWater\s*\=\s*(.*?)\,/)?.[1] === "true";
-        const voidGround      = str.match(/voidGround\s*\=\s*(.*?)\,/)?.[1] === "true";
-        const autoShowMetal   = str.match(/autoShowMetal\s*\=\s*(.*?)\,/)?.[1] === "true";
-        const minWind         = Number(str.match(/minWind\s*\=\s*(.*?)\,/)?.[1]);
-        const maxWind         = Number(str.match(/maxWind\s*\=\s*(.*?)\,/)?.[1]);
+        const voidWater = str.match(/voidWater\s*\=\s*(.*?)\,/)?.[1] === "true";
+        const voidGround = str.match(/voidGround\s*\=\s*(.*?)\,/)?.[1] === "true";
+        const autoShowMetal = str.match(/autoShowMetal\s*\=\s*(.*?)\,/)?.[1] === "true";
+        const minWind = Number(str.match(/minWind\s*\=\s*(.*?)\,/)?.[1]);
+        const maxWind = Number(str.match(/maxWind\s*\=\s*(.*?)\,/)?.[1]);
 
         const startPositionsGroups = str.matchAll(/\s*\[(\d)\]\s?\=\s?\{startPos\s?\=\s?\{x\s?\=\s?(\d*)\,\s?z\s?\=\s?(\d*)\}\}\,\s*/gm);
         const startPositionsArray = Array.from(startPositionsGroups).map(matches => matches.slice(1, 4).map(num => parseInt(num)));
@@ -98,7 +203,11 @@ export class MapParser {
         };
     }
 
-    protected async parseSmf(buffer: Buffer) : Promise<MapModel.Meta> {
+    protected async parseSmd(buffer: Buffer) : Promise<MapModel.Info> {
+        return {} as MapModel.Info
+    }
+
+    protected async parseSmf(buffer: Buffer): Promise<MapModel.Meta> {
         let bufferStream = new BufferStream(buffer);
 
         const magic = bufferStream.readString(16);
@@ -159,19 +268,17 @@ export class MapParser {
         const tileSize = bufferStream.readInt();
         const compressionType = bufferStream.readInt();
 
-        console.log(numOftiles, tileSize, compressionType);
-
         const startIndex = mipmapSize === 32 ? 0 : mipmapSize === 16 ? 512 : mipmapSize === 8 ? 640 : 672;
         const dxt1Size = Math.pow(mipmapSize, 2) / 2;
 
         await fs.mkdir("tiles", { recursive: true });
 
-        for (let smuX=0; smuX<this.meta.widthUnits; smuX++) {
-            for (let smuY=0; smuY<this.meta.heightUnits; smuY++) {
+        for (let smuX = 0; smuX < this.meta!.widthUnits; smuX++) {
+            for (let smuY = 0; smuY < this.meta!.heightUnits; smuY++) {
                 let tile: Buffer[][] = [];
-                for (let x=0; x<tileSize; x++) {
+                for (let x = 0; x < tileSize; x++) {
                     const col: Buffer[][] = [];
-                    for (let y=0; y<tileSize; y++) {
+                    for (let y = 0; y < tileSize; y++) {
                         const mipmap = bufferStream.read(680);
                         const dxt1 = mipmap.slice(startIndex, startIndex + dxt1Size);
                         const rgbaArray: Uint8Array = dxt.decompress(dxt1, mipmapSize, mipmapSize, dxt.flags.DXT1);
@@ -191,15 +298,15 @@ export class MapParser {
             }
         }
 
-        await this.stitchFinalMapTexture(mipmapSize, "tiles", "texture.png");
+        await this.getMapTexture(mipmapSize, "tiles", "texture.png");
     }
 
-    protected rgbaBufferToPixels(buffer: Buffer, mipmapSize: 32 | 16 | 8 | 4) : Buffer[][] {
+    protected rgbaBufferToPixels(buffer: Buffer, mipmapSize: 32 | 16 | 8 | 4): Buffer[][] {
         const bufferStream = new BufferStream(buffer);
         const pixels: Buffer[][] = [];
-        for (let y=0; y<mipmapSize; y++) {
+        for (let y = 0; y < mipmapSize; y++) {
             const row: Buffer[] = [];
-            for (let x=0; x<mipmapSize; x++) {
+            for (let x = 0; x < mipmapSize; x++) {
                 row.push(bufferStream.read(4));
             }
             pixels.push(row);
@@ -211,9 +318,9 @@ export class MapParser {
         return sharp(Buffer.concat(pixels), { raw: { width, height, channels: 4 } }).toFile(fileName);
     }
 
-    protected mergeRight<T>(a: T[][], b: T[][]) : T[][] {
+    protected mergeRight<T>(a: T[][], b: T[][]): T[][] {
         const out: T[][] = [];
-        for (let row=0; row<b.length; row++) {
+        for (let row = 0; row < b.length; row++) {
             if (a[row]) {
                 out.push(a[row].concat(b[row]));
             } else {
@@ -223,7 +330,7 @@ export class MapParser {
         return out;
     }
 
-    protected isTileEmpty(pixels: Buffer[][]) : boolean {
+    protected isTileEmpty(pixels: Buffer[][]): boolean {
         for (let row of pixels) {
             for (let pixel of row) {
                 const pixelIsBlack = pixel[0] === 0x00 && pixel[1] === 0x00 && pixel[2] === 0x00 && pixel[3] === 0xFF;
@@ -236,75 +343,13 @@ export class MapParser {
         return true;
     }
 
-    protected async stitchFinalMapTexture(mipmapSize: 32 | 16 | 8 | 4, tilesDir: string, outPath: string) {
-        let files: Array<{ x: number; y: number }> = [];
-        for (let x=0; x<this.meta.widthUnits; x++) {
-            for (let y=0; y<this.meta.heightUnits; y++) {
-                files.push({ x, y });
-            }
+    protected async sigint() {
+        if (this.config.verbose) {
+            console.log("\nGracefully shutting down from SIGINT (Crtl-C)");
         }
-
-        return await sharp({
-            create: {
-                width: (mipmapSize * 32) * this.meta.widthUnits,
-                height: (mipmapSize * 32) * this.meta.heightUnits,
-                background: { r: 0, g: 0, b: 0, alpha: 255 },
-                channels: 4
-            },
-        }).composite(files.map(file => {
-            return {
-                input: `${tilesDir}/${file.x}_${file.y}.png`,
-                raw: { width: (mipmapSize * 32), height: (mipmapSize * 32), channels: 4 as 4 },
-                top: file.y * (mipmapSize * 32),
-                left: file.x * (mipmapSize * 32)
-            };
-        })).toFile(outPath);
-    }
-
-    protected getRelativeHeightmap(heightMapBuffer: Buffer, mapWidth: number, mapHeight: number, minDepth: number, maxDepth: number) : number[][] {
-        const bufferStream = new BufferStream(heightMapBuffer);
-        const heightUnit = (maxDepth - minDepth) / 65536;
-        const heights: number[][] = [];
-        for (let y=0; y<mapHeight+1; y++) {
-            const row: number[] = [];
-            for (let x=0; x<mapWidth+1; x++){
-                const rawHeight = bufferStream.readInt(2, true);
-                const height = Math.round(((heightUnit * rawHeight) + minDepth));
-                row.push(height);
-            }
-            heights.push(row);
+        if (this.tmpDir) {
+            await this.destroy();
         }
-        
-        return heights;
-    }
-
-    protected async heightMapToImage(heightMapBuffer: Buffer, mapWidth: number, mapHeight: number) {
-        const ints = new BufferStream(heightMapBuffer).readInts(heightMapBuffer.length / 2, 2, true);
-        const test = ints.map(int => { return (int / 65536) * 255 });
-
-        return await sharp(Buffer.from(test), {
-            raw: { width: mapWidth + 1, height: mapHeight + 1, channels: 1 },
-        });
-    }
-
-    protected async typeMapToImage(typeMapBuffer: Buffer, mapWidth: number, mapHeight: number) {
-        return await sharp(typeMapBuffer, {
-            raw: { width: mapWidth / 2, height: mapHeight / 2, channels: 1 }
-        });
-    }
-
-    protected async minimapToImage(miniMapBuffer: Buffer) {
-        const rgbaArray: Uint8Array = dxt.decompress(miniMapBuffer, 1024, 1024, dxt.flags.DXT1);
-        const rgbaBuffer = Buffer.from(rgbaArray);
-
-        return await sharp(rgbaBuffer, {
-            raw: { width: 1024, height: 1024, channels: 4 }
-        });
-    }
-
-    protected async metalMapToImage(metalMapBuffer: Buffer, mapWidth: number, mapHeight: number) {
-        return await sharp(metalMapBuffer, {
-            raw: { width: mapWidth / 2, height: mapHeight / 2, channels: 1 }
-        });
+        process.exit();
     }
 }
