@@ -40,15 +40,7 @@
             "args": [
                 "working-files/test.ts"
             ],
-            "cwd": "${workspaceRoot}",
-            "internalConsoleOptions": "openOnSessionStart",
-            "skipFiles": [
-                "<node_internals>/**",
-                "node_modules/**"
-            ],
-            "env": {
-                "TS_NODE_PROJECT": "${workspaceFolder}/tsconfig.json"
-            }
+            "sourceMaps": true
         }
     ]
 }
