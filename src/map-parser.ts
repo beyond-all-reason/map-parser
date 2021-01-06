@@ -1,13 +1,13 @@
 import { promises as fs } from "fs";
 import { glob } from "glob";
+import { Merge } from "jaz-ts-utils";
 import { extractFull } from "node-7z";
-import * as path from "path";
 import * as os from "os";
+import * as path from "path";
 import sharp, { Sharp } from "sharp";
 
 import { BufferStream } from "./buffer-stream";
 import { MapModel } from "./map-model";
-import { Merge } from "jaz-ts-utils";
 const dxt = require("dxt-js");
 
 // https://github.com/spring/spring/tree/develop/rts/Map
@@ -17,7 +17,7 @@ const dxt = require("dxt-js");
 
 export interface MapParserConfig {
     verbose: boolean;
-    /** 
+    /**
      * Resolution of tile mipmaps. Can be 4, 8, 16 or 32. Each higher mipmap level doubles the final output resolution, and also resource usage
      * @default 4
      * */
@@ -50,8 +50,8 @@ export class MapParser {
 
             const archive = await this.extractSd7(mapFilePath, tempDir);
 
-            let info: Merge<MapModel.MapInfo, MapModel.SMD>
-            if (archive.mapInfo){
+            let info: Merge<MapModel.MapInfo, MapModel.SMD>;
+            if (archive.mapInfo) {
                 info = await this.parseMapInfo(archive.mapInfo);
             } else {
                 info = await this.parseSMD(archive.smd!);
@@ -72,7 +72,7 @@ export class MapParser {
                 typeMap: smf.typeMap,
                 textureMap: smt
             };
-        } catch (err: any){
+        } catch (err: any) {
             this.cleanup(tempDir);
             throw err;
         }
@@ -80,19 +80,19 @@ export class MapParser {
 
     protected async extractSd7(sd7Path: string, outPath: string): Promise<{ smf: Buffer, smt: Buffer, smd?: Buffer, mapInfo?: Buffer }> {
         return new Promise(async resolve => {
-            if (this.config.verbose){
+            if (this.config.verbose) {
                 console.log(`Extracting .sd7 to ${outPath}`);
             }
 
             await fs.mkdir(outPath, { recursive: true });
 
             const extractStream = extractFull(sd7Path, outPath, { recursive: true, $cherryPick: ["*.smf", "*.smd", "*.smt", "mapinfo.lua"] });
-            
+
             extractStream.on("end", async () => {
                 const smfPath = glob.sync(`${outPath}/**/*.smf`)[0];
                 const smtPath = glob.sync(`${outPath}/**/*.smt`)[0];
                 const smdPath = glob.sync(`${outPath}/**/*.smd`)[0];
-                const mapInfoPath = glob.sync(`${outPath}/mapinfo.lua`)[0]
+                const mapInfoPath = glob.sync(`${outPath}/mapinfo.lua`)[0];
 
                 const smf = await fs.readFile(smfPath);
                 const smt = await fs.readFile(smtPath);
@@ -105,8 +105,8 @@ export class MapParser {
     }
 
     protected async parseSMF(smfBuffer: Buffer): Promise<MapModel.SMF> {
-        if (this.config.verbose){
-            console.log(`Parsing .smf`);
+        if (this.config.verbose) {
+            console.log("Parsing .smf");
         }
 
         const bufferStream = new BufferStream(smfBuffer);
@@ -148,7 +148,9 @@ export class MapParser {
         const heightMapSize = (mapWidth+1) * (mapHeight+1);
         const heightMapBuffer = smfBuffer.slice(heightMapIndex, heightMapIndex + heightMapSize * 2);
         const heightMapValues = new BufferStream(heightMapBuffer).readInts(heightMapSize, 2, true);
-        const heightMapColors = heightMapValues.map(val => { return (val / 65536) * 255 });
+        const heightMapColors = heightMapValues.map(val => {
+            return (val / 65536) * 255;
+        });
         const heightMap = sharp(Buffer.from(heightMapColors), {
             raw: { width: mapWidth + 1, height: mapHeight + 1, channels: 1 },
         });
@@ -196,7 +198,7 @@ export class MapParser {
     }
 
     protected async parseSMT(smtBuffer: Buffer, tileIndexes: number[], mapWidthUnits: number, mapHeightUnits: number, mipmapSize: 4 | 8 | 16 | 32) : Promise<Sharp> {
-        if (this.config.verbose){
+        if (this.config.verbose) {
             console.log(`Parsing .smt at mipmap size ${mipmapSize}`);
         }
 
@@ -213,7 +215,7 @@ export class MapParser {
         const rowLength = mipmapSize * 4;
 
         const refTiles: Buffer[][] = [];
-        for (let i=0; i<numOfTiles; i++){
+        for (let i=0; i<numOfTiles; i++) {
             const dxt1 = bufferStream.read(680).slice(startIndex, startIndex + dxt1Size);
             const refTileRGBA: Uint8Array = dxt.decompress(dxt1, mipmapSize, mipmapSize, dxt.flags.DXT1);
             const refTileRGBABuffer = Buffer.from(refTileRGBA);
@@ -227,16 +229,16 @@ export class MapParser {
         }
 
         const tiles: Buffer[][] = [];
-        for (let i=0; i<tileIndexes.length; i++){
+        for (let i=0; i<tileIndexes.length; i++) {
             const refTileIndex = tileIndexes[i];
             const tile = this.cloneTile(refTiles[refTileIndex]);
             tiles.push(tile);
         }
 
         const tileStrips: Buffer[] = [];
-        for (let y=0; y<mapHeightUnits * 32; y++){
+        for (let y=0; y<mapHeightUnits * 32; y++) {
             const tileStrip: Buffer[][] = [];
-            for (let x=0; x<mapWidthUnits * 32; x++){
+            for (let x=0; x<mapWidthUnits * 32; x++) {
                 const tile = tiles.shift()!;
                 tileStrip.push(tile);
             }
@@ -248,8 +250,8 @@ export class MapParser {
     }
 
     protected async parseMapInfo(buffer: Buffer): Promise<MapModel.MapInfo> {
-        if (this.config.verbose){
-            console.log(`Parsing mapinfo.lua`);
+        if (this.config.verbose) {
+            console.log("Parsing mapinfo.lua");
         }
 
         const str = buffer.toString();
@@ -289,8 +291,8 @@ export class MapParser {
     }
 
     protected async parseSMD(buffer: Buffer) : Promise<MapModel.SMD> {
-        if (this.config.verbose){
-            console.log(`Parsing .smd`);
+        if (this.config.verbose) {
+            console.log("Parsing .smd");
         }
 
         const smd = buffer.toString();
@@ -301,9 +303,9 @@ export class MapParser {
 
         for (const strPair of strPairs) {
             const [key, val] = strPair.slice(0, strPair.length - 1).split("=");
-            if (key === "StartPosX"){
+            if (key === "StartPosX") {
                 startPositions.push({ x: Number(val), z: 0 });
-            } else if(key === "StartPosZ") {
+            } else if (key === "StartPosZ") {
                 startPositions[startPositions.length - 1].z = Number(val);
             } else {
                 strObj[key] = val;
@@ -320,12 +322,12 @@ export class MapParser {
             minWind: Number(strObj.MinWind),
             maxWind: Number(strObj.MaxWind),
             startPositions
-        }
+        };
     }
 
     protected cloneTile(tile: Buffer[]) : Buffer[] {
         const clone: Buffer[] = [];
-        for (const row of tile){
+        for (const row of tile) {
             clone.push(Buffer.from(row));
         }
         return clone;
@@ -333,18 +335,18 @@ export class MapParser {
 
     protected joinTilesHorizontally(tiles: Buffer[][], mipmapSize: 4 | 8 | 16 | 32) : Buffer {
         const tileRows: Buffer[] = [];
-        for (let y=0; y<mipmapSize; y++){
-            for (let x=0; x<tiles.length; x++){
+        for (let y=0; y<mipmapSize; y++) {
+            for (let x=0; x<tiles.length; x++) {
                 const row = tiles[x].shift()!;
                 tileRows.push(row);
             }
         }
-        
+
         return Buffer.concat(tileRows);
     }
 
     protected async cleanup(tmpDir: string) {
-        if (this.config.verbose){
+        if (this.config.verbose) {
             console.log(`Cleaning up temp dir: ${tmpDir}`);
         }
 
