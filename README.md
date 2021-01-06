@@ -5,7 +5,7 @@ Parser for SpringRTS map files
 
 `npm i --save spring-map-parser`
 
-```
+```ts
 import { MapParser } from "spring-map-parser";
 
 (async () => {
