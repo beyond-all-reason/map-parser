@@ -21,7 +21,7 @@ export namespace MapModel {
         version: string;
         mapfile: string;
         modtype: number;
-        maphardness: number;
+        mapHardness: number;
         notDeformable: boolean;
         gravity: number;
         tidalStrength: number;

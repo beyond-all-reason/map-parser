@@ -258,24 +258,24 @@ export class MapParser {
 
         // yes, all this regex is messy and expensive. no, i don't care
 
-        const name = str.match(/(?!t).name\s*\=\s*\"(.*?)\"/)?.[1]!;
-        const shortname = str.match(/shortname\s*\=\s*\"(.*?)\"/)?.[1]!;
-        const description = str.match(/description\s*\=\s*\"(.*?)\"/)?.[1]!;
-        const author = str.match(/author\s*\=\s*\"(.*?)\"/)?.[1]!;
-        const version = str.match(/version\s*\=\s*\"(.*?)\"/)?.[1]!;
-        const mapfile = str.match(/mapfile\s*\=\s*\"(.*?)\"/)?.[1]!;
-        const modtype = Number(str.match(/modtype\s*\=\s*(.*?)\,/)?.[1]);
-        const maphardness = Number(str.match(/maphardness\s*\=\s*(.*?)\,/)?.[1]);
-        const notDeformable = str.match(/notDeformable\s*\=\s*(.*?)\,/)?.[1] === "true";
-        const gravity = Number(str.match(/gravity\s*\=\s*(.*?)\,/)?.[1]);
-        const tidalStrength = Number(str.match(/tidalStrength\s*\=\s*(.*?)\,/)?.[1]);
-        const maxMetal = Number(str.match(/maxMetal\s*\=\s*(.*?)\,/)?.[1]);
-        const extractorRadius = Number(str.match(/extractorRadius\s*\=\s*(.*?)\,/)?.[1]);
-        const voidWater = str.match(/voidWater\s*\=\s*(.*?)\,/)?.[1] === "true";
-        const voidGround = str.match(/voidGround\s*\=\s*(.*?)\,/)?.[1] === "true";
-        const autoShowMetal = str.match(/autoShowMetal\s*\=\s*(.*?)\,/)?.[1] === "true";
-        const minWind = Number(str.match(/minWind\s*\=\s*(.*?)\,/)?.[1]);
-        const maxWind = Number(str.match(/maxWind\s*\=\s*(.*?)\,/)?.[1]);
+        const name = str.match(/(?!t).name\s*\=\s*\"(.*?)\"/i)?.[1]!;
+        const shortname = str.match(/shortname\s*\=\s*\"(.*?)\"/i)?.[1]!;
+        const description = str.match(/description\s*\=\s*\"(.*?)\"/i)?.[1]!;
+        const author = str.match(/author\s*\=\s*\"(.*?)\"/i)?.[1]!;
+        const version = str.match(/version\s*\=\s*\"(.*?)\"/i)?.[1]!;
+        const mapfile = str.match(/mapfile\s*\=\s*\"(.*?)\"/i)?.[1]!;
+        const modtype = Number(str.match(/modtype\s*\=\s*(.*?)\,/i)?.[1]);
+        const mapHardness = Number(str.match(/maphardness\s*\=\s*(.*?)\,/i)?.[1]);
+        const notDeformable = str.match(/notDeformable\s*\=\s*(.*?)\,/i)?.[1] === "true";
+        const gravity = Number(str.match(/gravity\s*\=\s*(.*?)\,/i)?.[1]);
+        const tidalStrength = Number(str.match(/tidalStrength\s*\=\s*(.*?)\,/i)?.[1]);
+        const maxMetal = Number(str.match(/maxMetal\s*\=\s*(.*?)\,/i)?.[1]);
+        const extractorRadius = Number(str.match(/extractorRadius\s*\=\s*(.*?)\,/i)?.[1]);
+        const voidWater = str.match(/voidWater\s*\=\s*(.*?)\,/i)?.[1] === "true";
+        const voidGround = str.match(/voidGround\s*\=\s*(.*?)\,/i)?.[1] === "true";
+        const autoShowMetal = str.match(/autoShowMetal\s*\=\s*(.*?)\,/i)?.[1] === "true";
+        const minWind = Number(str.match(/minWind\s*\=\s*(.*?)\,/i)?.[1]);
+        const maxWind = Number(str.match(/maxWind\s*\=\s*(.*?)\,/i)?.[1]);
 
         const startPositionsGroups = str.matchAll(/\s*\[(\d)\]\s?\=\s?\{startPos\s?\=\s?\{x\s?\=\s?(\d*)\,\s?z\s?\=\s?(\d*)\}\}\,\s*/gm);
         const startPositionsArray = Array.from(startPositionsGroups).map(matches => matches.slice(1, 4).map(num => parseInt(num)));
@@ -285,7 +285,7 @@ export class MapParser {
         }
 
         return {
-            name, shortname, description, author, version, mapfile, modtype, maphardness, notDeformable, gravity, tidalStrength,
+            name, shortname, description, author, version, mapfile, modtype, mapHardness, notDeformable, gravity, tidalStrength,
             maxMetal, extractorRadius, voidWater, voidGround, autoShowMetal, minWind, maxWind, startPositions
         };
     }
