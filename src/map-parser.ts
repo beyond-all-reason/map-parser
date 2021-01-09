@@ -48,7 +48,7 @@ export class MapParser {
         const fileExt = filePath.ext;
         const tempDir = path.join(os.tmpdir(), fileName);
 
-        process.on("SIGINT", async () => this.sigint(tempDir));
+        const sigintBinding = process.on("SIGINT", async () => this.sigint(tempDir));
 
         try {
             if (fileExt !== ".sd7") {
@@ -95,6 +95,7 @@ export class MapParser {
             };
         } catch (err: any) {
             this.cleanup(tempDir);
+            sigintBinding.removeAllListeners();
             throw err;
         }
     }
