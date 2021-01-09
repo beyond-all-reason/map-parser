@@ -1,4 +1,4 @@
-import { promises as fs } from "fs";
+import { promises as fs, existsSync } from "fs";
 import { glob } from "glob";
 import { Merge } from "jaz-ts-utils";
 import { extractFull } from "node-7z";
@@ -18,15 +18,21 @@ const dxt = require("dxt-js");
 export interface MapParserConfig {
     verbose: boolean;
     /**
-     * Resolution of tile mipmaps. Can be 4, 8, 16 or 32. Each higher mipmap level doubles the final output resolution, and also resource usage
+     * Resolution of tile mipmaps. Can be 4, 8, 16 or 32. Each higher mipmap level doubles the final output resolution, and also resource usage.
      * @default 4
      * */
     mipmapSize: 4 | 8 | 16 | 32;
+    /**
+     * If you don't want textureMap, set this to true to speed up parsing.
+     * @default false
+     */
+    skipSmt: boolean;
 }
 
 const mapParserDefaultConfig: Partial<MapParserConfig> = {
     verbose: false,
-    mipmapSize: 4
+    mipmapSize: 4,
+    skipSmt: false
 };
 
 export class MapParser {
@@ -37,8 +43,9 @@ export class MapParser {
     }
 
     public async parseMap(mapFilePath: string) : Promise<MapModel.Map> {
-        const fileName = path.parse(mapFilePath).name;
-        const fileExt = path.parse(mapFilePath).ext;
+        const filePath = path.parse(mapFilePath);
+        const fileName = filePath .name;
+        const fileExt = filePath.ext;
         const tempDir = path.join(os.tmpdir(), fileName);
 
         process.on("SIGINT", async () => this.sigint(tempDir));
@@ -58,12 +65,26 @@ export class MapParser {
             }
 
             const smf = await this.parseSMF(archive.smf);
-            const smt = await this.parseSMT(archive.smt, smf.tileIndexMap, smf.mapWidthUnits, smf.mapHeightUnits, this.config.mipmapSize);
+
+            let smt: Sharp | undefined;
+            if (!this.config.skipSmt){
+                smt = await this.parseSMT(archive.smt, smf.tileIndexMap, smf.mapWidthUnits, smf.mapHeightUnits, this.config.mipmapSize);
+            }
+
+            let scriptName = "";
+            if (info.name && info.version === "1") {
+                scriptName = info.name;
+            } else if (info.name) {
+                scriptName = `${info.name} ${info.version}`;
+            } else if (archive.smdName) {
+                scriptName = archive.smdName;
+            }
 
             this.cleanup(tempDir);
 
             return {
                 fileName,
+                scriptName,
                 info,
                 meta: smf,
                 heightMap: smf.heightMap,
@@ -78,10 +99,14 @@ export class MapParser {
         }
     }
 
-    protected async extractSd7(sd7Path: string, outPath: string): Promise<{ smf: Buffer, smt: Buffer, smd?: Buffer, mapInfo?: Buffer }> {
+    protected async extractSd7(sd7Path: string, outPath: string): Promise<{ smf: Buffer, smt: Buffer, smd?: Buffer, smdName?: string, mapInfo?: Buffer }> {
         return new Promise(async resolve => {
             if (this.config.verbose) {
                 console.log(`Extracting .sd7 to ${outPath}`);
+            }
+
+            if (!existsSync(sd7Path)) {
+                throw new Error(`File not found: ${sd7Path}`);
             }
 
             await fs.mkdir(outPath, { recursive: true });
@@ -97,9 +122,10 @@ export class MapParser {
                 const smf = await fs.readFile(smfPath);
                 const smt = await fs.readFile(smtPath);
                 const smd = smdPath ? await fs.readFile(smdPath) : undefined;
+                const smdName = smdPath ? path.parse(smdPath).name : undefined;
                 const mapInfo = mapInfoPath ? await fs.readFile(mapInfoPath) : undefined;
 
-                resolve({ smf, smt, smd, mapInfo });
+                resolve({ smf, smt, smd, smdName, mapInfo });
             });
         });
     }

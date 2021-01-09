@@ -11,7 +11,7 @@ import { MapParser } from "spring-map-parser";
 (async () => {
     const mapPath = "./working-files/maps/aberdeen3v3v3.sd7";
 
-    const parser = new MapParser({ verbose: true, mipmapSize: 4 });
+    const parser = new MapParser({ verbose: true, mipmapSize: 4, skipSmt: false });
 
     const map = await parser.parseMap(mapPath);
 

@@ -4,9 +4,10 @@ import { Sharp } from "sharp";
 export namespace MapModel {
     export interface Map {
         fileName: string;
+        scriptName: string;
         info: Merge<MapInfo, SMD>;
         meta: SMF;
-        textureMap: Sharp;
+        textureMap?: Sharp;
         heightMap: Sharp;
         miniMap: Sharp;
         metalMap: Sharp;
