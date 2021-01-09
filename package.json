@@ -12,7 +12,7 @@
     "lint-fix": "./node_modules/.bin/eslint . --ext .ts --fix"
   },
   "author": "Jazcash",
-  "license": "GPL-3.0-or-later",
+  "license": "mit",
   "repository": {
     "type": "git",
     "url": "https://github.com/Jazcash/spring-map-parser.git"
