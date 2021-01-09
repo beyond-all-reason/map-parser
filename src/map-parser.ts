@@ -72,7 +72,7 @@ export class MapParser {
             }
 
             let scriptName = "";
-            if (info.name && info.version === "1") {
+            if (info.name && info.version && info.name.includes(info.version!)) {
                 scriptName = info.name;
             } else if (info.name) {
                 scriptName = `${info.name} ${info.version}`;
@@ -380,9 +380,6 @@ export class MapParser {
     }
 
     protected async sigint(tmpDir: string) {
-        if (this.config.verbose) {
-            console.log("\nGracefully shutting down from SIGINT (Crtl-C)");
-        }
         await this.cleanup(tmpDir);
         process.exit();
     }
