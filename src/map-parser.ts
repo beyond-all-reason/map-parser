@@ -1,4 +1,4 @@
-import { promises as fs, existsSync } from "fs";
+import { existsSync, promises as fs } from "fs";
 import { glob } from "glob";
 import { Merge } from "jaz-ts-utils";
 import { extractFull } from "node-7z";
@@ -67,7 +67,7 @@ export class MapParser {
             const smf = await this.parseSMF(archive.smf);
 
             let smt: Sharp | undefined;
-            if (!this.config.skipSmt){
+            if (!this.config.skipSmt) {
                 smt = await this.parseSMT(archive.smt, smf.tileIndexMap, smf.mapWidthUnits, smf.mapHeightUnits, this.config.mipmapSize);
             }
 
