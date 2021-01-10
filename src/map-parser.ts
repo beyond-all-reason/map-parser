@@ -76,8 +76,8 @@ export class MapParser {
                 scriptName = info.name;
             } else if (info.name) {
                 scriptName = `${info.name} ${info.version}`;
-            } else if (archive.smdName) {
-                scriptName = archive.smdName;
+            } else if (archive.smfName) {
+                scriptName = archive.smfName;
             }
 
             this.cleanup(tempDir);
@@ -100,7 +100,7 @@ export class MapParser {
         }
     }
 
-    protected async extractSd7(sd7Path: string, outPath: string): Promise<{ smf: Buffer, smt: Buffer, smd?: Buffer, smdName?: string, mapInfo?: Buffer }> {
+    protected async extractSd7(sd7Path: string, outPath: string): Promise<{ smf: Buffer, smt: Buffer, smd?: Buffer, smfName?: string, mapInfo?: Buffer }> {
         return new Promise(async resolve => {
             if (this.config.verbose) {
                 console.log(`Extracting .sd7 to ${outPath}`);
@@ -121,12 +121,12 @@ export class MapParser {
                 const mapInfoPath = glob.sync(`${outPath}/mapinfo.lua`)[0];
 
                 const smf = await fs.readFile(smfPath);
+                const smfName = smfPath ? path.parse(smfPath).name : undefined;
                 const smt = await fs.readFile(smtPath);
                 const smd = smdPath ? await fs.readFile(smdPath) : undefined;
-                const smdName = smdPath ? path.parse(smdPath).name : undefined;
                 const mapInfo = mapInfoPath ? await fs.readFile(mapInfoPath) : undefined;
 
-                resolve({ smf, smt, smd, smdName, mapInfo });
+                resolve({ smf, smt, smd, smfName, mapInfo });
             });
         });
     }
