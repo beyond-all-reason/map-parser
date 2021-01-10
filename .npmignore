@@ -1,0 +1,9 @@
+# .gitignore
+node_modules
+/working-files
+/tiles
+/out.png
+/height.jpg
+/texture.png
+
+/test_maps
