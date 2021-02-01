@@ -36,6 +36,7 @@
     ]
   },
   "dependencies": {
+    "7zip-bin": "^5.0.3",
     "@types/sharp": "^0.26.1",
     "dxt-js": "0.0.3",
     "glob": "^7.1.6",
