@@ -1,7 +1,7 @@
 import fs from "fs";
 import * as path from "path";
 
-import { MapParser } from "../src/map-parser";
+import { MapParser } from "../dist/map-parser";
 
 const testDir = "test";
 const testMapsDir = path.join(testDir, "test_maps");

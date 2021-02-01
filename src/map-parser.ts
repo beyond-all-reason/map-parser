@@ -2,6 +2,7 @@ import { existsSync, promises as fs } from "fs";
 import { glob } from "glob";
 import { Merge } from "jaz-ts-utils";
 import { extractFull } from "node-7z";
+import sevenBin from '7zip-bin'
 import * as os from "os";
 import * as path from "path";
 import sharp, { Sharp } from "sharp";
@@ -112,7 +113,11 @@ export class MapParser {
 
             await fs.mkdir(outPath, { recursive: true });
 
-            const extractStream = extractFull(sd7Path, outPath, { recursive: true, $cherryPick: ["*.smf", "*.smd", "*.smt", "mapinfo.lua"] });
+            const extractStream = extractFull(sd7Path, outPath, {
+                $bin: sevenBin.path7za,
+                recursive: true,
+                $cherryPick: ["*.smf", "*.smd", "*.smt", "mapinfo.lua"]
+            });
 
             extractStream.on("end", async () => {
                 const smfPath = glob.sync(`${outPath}/**/*.smf`)[0];
