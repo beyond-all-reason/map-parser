@@ -1,8 +1,8 @@
+import sevenBin from "7zip-bin";
 import { existsSync, promises as fs } from "fs";
 import { glob } from "glob";
 import { Merge } from "jaz-ts-utils";
 import { extractFull } from "node-7z";
-import sevenBin from '7zip-bin'
 import * as os from "os";
 import * as path from "path";
 import sharp, { Sharp } from "sharp";
