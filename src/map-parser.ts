@@ -3,6 +3,7 @@ import { existsSync, promises as fs } from "fs";
 import { glob } from "glob";
 import { Merge } from "jaz-ts-utils";
 import { extractFull } from "node-7z";
+import * as StreamZip from "node-stream-zip";
 import * as os from "os";
 import * as path from "path";
 import sharp, { Sharp } from "sharp";
@@ -52,11 +53,11 @@ export class MapParser {
         const sigintBinding = process.on("SIGINT", async () => this.sigint(tempDir));
 
         try {
-            if (fileExt !== ".sd7") {
-                throw new Error(`${fileExt} extension not yet supported, .sd7 only for now, sorry!`);
+            if (fileExt !== ".sd7" && fileExt !== ".sdz") {
+                throw new Error(`${fileExt} extension is not supported, .sd7 and .sdz only.`);
             }
 
-            const archive = await this.extractSd7(mapFilePath, tempDir);
+            const archive = fileExt === ".sd7" ? await this.extractSd7(mapFilePath, tempDir) : await this.extractSdz(mapFilePath, tempDir);
 
             let info: Merge<MapModel.MapInfo, MapModel.SMD>;
             if (archive.mapInfo) {
@@ -133,6 +134,36 @@ export class MapParser {
 
                 resolve({ smf, smt, smd, smfName, mapInfo });
             });
+        });
+    }
+
+    protected extractSdz(sdzPath: string, outPath: string): Promise<{ smf: Buffer, smt: Buffer, smd?: Buffer, smfName?: string, mapInfo?: Buffer }> {
+        return new Promise(async resolve => {
+            if (this.config.verbose) {
+                console.log(`Extracting .sdz to ${outPath}`);
+            }
+
+            if (!existsSync(sdzPath)) {
+                throw new Error(`File not found: ${sdzPath}`);
+            }
+
+            await fs.mkdir(outPath, { recursive: true });
+
+            const zip = new StreamZip.async({ file: sdzPath });
+            await zip.extract("maps/", outPath);
+
+            const smfPath = glob.sync(`${outPath}/**/*.smf`)[0];
+            const smtPath = glob.sync(`${outPath}/**/*.smt`)[0];
+            const smdPath = glob.sync(`${outPath}/**/*.smd`)[0];
+            const mapInfoPath = glob.sync(`${outPath}/mapinfo.lua`)[0];
+
+            const smf = await fs.readFile(smfPath);
+            const smfName = smfPath ? path.parse(smfPath).name : undefined;
+            const smt = await fs.readFile(smtPath);
+            const smd = smdPath ? await fs.readFile(smdPath) : undefined;
+            const mapInfo = mapInfoPath ? await fs.readFile(mapInfoPath) : undefined;
+
+            resolve({ smf, smt, smd, smfName, mapInfo });
         });
     }
 
