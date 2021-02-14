@@ -151,6 +151,7 @@ export class MapParser {
 
             const zip = new StreamZip.async({ file: sdzPath });
             await zip.extract("maps/", outPath);
+            await (zip as any).close();
 
             const smfPath = glob.sync(`${outPath}/**/*.smf`)[0];
             const smtPath = glob.sync(`${outPath}/**/*.smt`)[0];
