@@ -310,7 +310,7 @@ export class MapParser {
             tileStrips.push(textureStrip);
         }
 
-        return sharp(Buffer.concat(tileStrips), { raw: { width: mipmapSize * mapWidthUnits * 32, height: mipmapSize * mapHeightUnits * 32, channels: 4 } });
+        return sharp(Buffer.concat(tileStrips), { raw: { width: mipmapSize * mapWidthUnits * 32, height: mipmapSize * mapHeightUnits * 32, channels: 4 } }).removeAlpha();
     }
 
     protected async parseMapInfo(buffer: Buffer): Promise<MapModel.MapInfo> {
