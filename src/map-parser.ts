@@ -341,11 +341,13 @@ export class MapParser {
         const minWind = Number(str.match(/minWind\s*\=\s*(.*?)\,/i)?.[1]);
         const maxWind = Number(str.match(/maxWind\s*\=\s*(.*?)\,/i)?.[1]);
 
-        const startPositionsGroups = str.matchAll(/\s*\[(\d)\]\s?\=\s?\{startPos\s?\=\s?\{x\s?\=\s?(\d*)\,\s?z\s?\=\s?(\d*)\}\}\,\s*/gm);
-        const startPositionsArray = Array.from(startPositionsGroups).map(matches => matches.slice(1, 4).map(num => parseInt(num)));
+        const startPosMatches = str.matchAll(/startPos\s*\=\s*\{\s*x\s*\=\s*(?<x>\d*)\s*\,\s*z\s*\=\s*(?<z>\d*)/gm);
         const startPositions: Array<{ x: number, z: number }> = [];
-        for (const [teamId, x, z] of startPositionsArray) {
-            startPositions[teamId] = { x, z };
+        let teamId = 0;
+        for (const match of startPosMatches) {
+            const { x, z } = match.groups!;
+            startPositions[teamId] = { x: Number(x), z: Number(z) };
+            teamId++;
         }
 
         return {
