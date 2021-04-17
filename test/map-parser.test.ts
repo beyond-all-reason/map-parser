@@ -7,11 +7,9 @@ const testDir = "test";
 const testMapsDir = path.join(testDir, "test_maps");
 
 it("full-export", async () => {
-    // expect.assertions(3);
-
     const mapPath = path.join(testMapsDir, "red_comet.sd7");
 
-    const parser = new MapParser({ verbose: true, mipmapSize: 4, skipSmt: false });
+    const parser = new MapParser({ verbose: false, mipmapSize: 4, skipSmt: false });
 
     const map = await parser.parseMap(mapPath);
 
@@ -29,11 +27,9 @@ it("full-export", async () => {
 
     await map.miniMap.quality(50).writeAsync("test/mini.jpg");
     expect(fs.existsSync("test/mini.jpg")).toBe(true);
-});
+}, 20000);
 
 it("minimap-export", async () => {
-    // expect.assertions(1);
-
     const mapPath = path.join(testMapsDir, "red_comet.sd7");
 
     const parser = new MapParser({ verbose: true, mipmapSize: 4, skipSmt: true });
@@ -42,4 +38,4 @@ it("minimap-export", async () => {
 
     await map.miniMap.quality(50).writeAsync("test/mini.jpg");
     expect(fs.existsSync("test/mini.jpg")).toBe(true);
-});
+}, 20000);
