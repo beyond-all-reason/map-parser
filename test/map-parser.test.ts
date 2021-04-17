@@ -15,19 +15,19 @@ it("full-export", async () => {
 
     const map = await parser.parseMap(mapPath);
 
-    await map.textureMap?.toFile("test/texture.png");
+    await map.textureMap?.writeAsync("test/texture.png");
     expect(fs.existsSync("test/texture.png")).toBe(true);
 
-    await map.heightMap.jpeg({ quality: 50 }).toFile("test/height.jpg");
+    await map.heightMap.quality(50).writeAsync("test/height.jpg");
     expect(fs.existsSync("test/height.jpg")).toBe(true);
 
-    await map.metalMap.jpeg({ quality: 50 }).toFile("test/metal.jpg");
+    await map.metalMap.quality(50).writeAsync("test/metal.jpg");
     expect(fs.existsSync("test/metal.jpg")).toBe(true);
 
-    await map.typeMap.jpeg({ quality: 50 }).toFile("test/type.jpg");
+    await map.typeMap.quality(50).writeAsync("test/type.jpg");
     expect(fs.existsSync("test/type.jpg")).toBe(true);
 
-    await map.miniMap.jpeg({ quality: 50 }).toFile("test/mini.jpg");
+    await map.miniMap.quality(50).writeAsync("test/mini.jpg");
     expect(fs.existsSync("test/mini.jpg")).toBe(true);
 });
 
@@ -40,6 +40,6 @@ it("minimap-export", async () => {
 
     const map = await parser.parseMap(mapPath);
 
-    await map.miniMap.jpeg({ quality: 50 }).toFile("test/mini.jpg");
+    await map.miniMap.quality(50).writeAsync("test/mini.jpg");
     expect(fs.existsSync("test/mini.jpg")).toBe(true);
 });

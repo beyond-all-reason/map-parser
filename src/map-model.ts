@@ -1,5 +1,5 @@
 import { Merge } from "jaz-ts-utils";
-import { Sharp } from "sharp";
+import Jimp from "jimp";
 
 export namespace MapModel {
     export interface Map {
@@ -7,11 +7,11 @@ export namespace MapModel {
         scriptName: string;
         info: Merge<MapInfo, SMD>;
         meta: SMF;
-        textureMap?: Sharp;
-        heightMap: Sharp;
-        miniMap: Sharp;
-        metalMap: Sharp;
-        typeMap: Sharp;
+        textureMap?: Jimp;
+        heightMap: Jimp;
+        miniMap: Jimp;
+        metalMap: Jimp;
+        typeMap: Jimp;
     }
 
     export interface MapInfo {
@@ -73,10 +73,10 @@ export namespace MapModel {
         numOfTilesInAllFiles: number;
         numOfTilesInThisFile: number;
         smtFileName: string;
-        heightMap: Sharp;
-        typeMap: Sharp;
-        miniMap: Sharp;
-        metalMap: Sharp;
+        heightMap: Jimp;
+        typeMap: Jimp;
+        miniMap: Jimp;
+        metalMap: Jimp;
         tileIndexMap: number[];
         features: any; // TODO
     }

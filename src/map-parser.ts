@@ -2,11 +2,11 @@ import sevenBin from "7zip-bin";
 import { existsSync, promises as fs } from "fs";
 import { glob } from "glob";
 import { Merge } from "jaz-ts-utils";
+import Jimp from "jimp";
 import { extractFull } from "node-7z";
 import * as StreamZip from "node-stream-zip";
 import * as os from "os";
 import * as path from "path";
-import sharp, { Sharp } from "sharp";
 
 import { BufferStream } from "./buffer-stream";
 import { MapModel } from "./map-model";
@@ -68,7 +68,7 @@ export class MapParser {
 
             const smf = await this.parseSMF(archive.smf);
 
-            let smt: Sharp | undefined;
+            let smt: Jimp | undefined;
             if (!this.config.skipSmt) {
                 smt = await this.parseSMT(archive.smt, smf.tileIndexMap, smf.mapWidthUnits, smf.mapHeightUnits, this.config.mipmapSize);
             }
@@ -213,30 +213,39 @@ export class MapParser {
         const heightMapBuffer = smfBuffer.slice(heightMapIndex, heightMapIndex + heightMapSize * 2);
         const heightMapValues = new BufferStream(heightMapBuffer).readInts(heightMapSize, 2, true);
         const heightMapColors = heightMapValues.map(val => {
-            return (val / 65536) * 255;
+            const level = (val / 65536) * 255;
+            return [level, level, level, 255];
         });
-        const heightMap = sharp(Buffer.from(heightMapColors), {
-            raw: { width: mapWidth + 1, height: mapHeight + 1, channels: 1 },
+        const heightMap = new Jimp({
+            data: Buffer.from(heightMapColors.flat()),
+            width: mapWidth + 1,
+            height: mapHeight + 1
         });
 
         const typeMapSize = (mapWidth/2) * (mapHeight/2);
         const typeMapBuffer = smfBuffer.slice(typeMapIndex, typeMapIndex + typeMapSize);
-        const typeMap = sharp(typeMapBuffer, {
-            raw: { width: mapWidth / 2, height: mapHeight / 2, channels: 1 }
+        const typeMap = new Jimp({
+            data: singleChannelToQuadChannel(typeMapBuffer),
+            width: mapWidth / 2,
+            height: mapHeight / 2
         });
 
         const miniMapSize = 699048;
         const miniMapBuffer = smfBuffer.slice(miniMapIndex, miniMapIndex + miniMapSize);
         const miniMapRgbas: Uint8Array = dxt.decompress(miniMapBuffer, 1024, 1024, dxt.flags.DXT1);
         const miniMapRgbaBuffer = Buffer.from(miniMapRgbas);
-        const miniMap = sharp(miniMapRgbaBuffer, {
-            raw: { width: 1024, height: 1024, channels: 4 }
+        const miniMap = new Jimp({
+            data: miniMapRgbaBuffer,
+            width: 1024,
+            height: 1024
         });
 
         const metalMapSize = (mapWidth/2) * (mapHeight/2);
         const metalMapBuffer = smfBuffer.slice(metalMapIndex, metalMapIndex + metalMapSize);
-        const metalMap = sharp(metalMapBuffer, {
-            raw: { width: mapWidth / 2, height: mapHeight / 2, channels: 1 }
+        const metalMap = new Jimp({
+            data: singleChannelToQuadChannel(metalMapBuffer),
+            width: mapWidth / 2,
+            height: mapHeight / 2
         });
 
         const tileIndexMapBufferStream = new BufferStream(smfBuffer.slice(tileIndexMapIndex));
@@ -261,7 +270,7 @@ export class MapParser {
         };
     }
 
-    protected async parseSMT(smtBuffer: Buffer, tileIndexes: number[], mapWidthUnits: number, mapHeightUnits: number, mipmapSize: 4 | 8 | 16 | 32) : Promise<Sharp> {
+    protected async parseSMT(smtBuffer: Buffer, tileIndexes: number[], mapWidthUnits: number, mapHeightUnits: number, mipmapSize: 4 | 8 | 16 | 32) : Promise<Jimp> {
         if (this.config.verbose) {
             console.log(`Parsing .smt at mipmap size ${mipmapSize}`);
         }
@@ -310,7 +319,11 @@ export class MapParser {
             tileStrips.push(textureStrip);
         }
 
-        return sharp(Buffer.concat(tileStrips), { raw: { width: mipmapSize * mapWidthUnits * 32, height: mipmapSize * mapHeightUnits * 32, channels: 4 } }).removeAlpha();
+        return new Jimp({
+            data: Buffer.concat(tileStrips),
+            width: mipmapSize * mapWidthUnits * 32,
+            height: mipmapSize * mapHeightUnits * 32
+        }).background(0x000000);
     }
 
     protected async parseMapInfo(buffer: Buffer): Promise<MapModel.MapInfo> {
@@ -423,4 +436,13 @@ export class MapParser {
         await this.cleanup(tmpDir);
         process.exit();
     }
+}
+
+function singleChannelToQuadChannel(buffer: Buffer) : Buffer {
+    const outBuffer: number[] = [];
+    buffer.forEach(val => {
+        outBuffer.push(val, val, val, 255);
+    });
+
+    return Buffer.from(outBuffer);
 }

@@ -17,8 +17,13 @@ import { MapParser } from "spring-map-parser";
 
     console.log(map.info.startPositions[0].x);
 
-    await map.textureMap.toFile("texture.png");
-
-    await map.heightMap.jpeg({ quality: 50 }).toFile("height.jpg");
+    await map.textureMap!.writeAsync("working-files/texture.png");
+    await map.heightMap!.resize(200, -1).writeAsync("working-files/height.png"); // -1 here means preserve aspect ratio
+    await map.metalMap!.writeAsync("working-files/metal.png");
+    await map.typeMap!.writeAsync("working-files/type.png");
+    await map.miniMap!.writeAsync("working-files/mini.png");
+    await map.textureMap!.scaleToFit(765, 300).quality(80).writeAsync("working-files/test.jpg");
 })();
 ```
+
+The different map images are [Jimp](https://www.npmjs.com/package/jimp) instances, which provides some useful image processing functionality.
