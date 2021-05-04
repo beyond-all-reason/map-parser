@@ -33,7 +33,7 @@ export interface MapParserConfig {
      * Path to the 7za executable. Will automatically resolve if left unspecified.
      * @default sevenBin.path7za
      */
-    path7za?: string
+    path7za: string
 }
 
 const mapParserDefaultConfig: Partial<MapParserConfig> = {
