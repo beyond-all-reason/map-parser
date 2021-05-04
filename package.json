@@ -6,10 +6,10 @@
   "types": "dist/index.d.ts",
   "scripts": {
     "prepublish": "npm run build",
-    "build": "./node_modules/.bin/tsc",
-    "dev": "./node_modules/.bin/tsc --watch",
-    "lint": "./node_modules/.bin/eslint . --ext .ts",
-    "lint-fix": "./node_modules/.bin/eslint . --ext .ts --fix",
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "lint": "eslint . --ext .ts",
+    "lint-fix": "eslint . --ext .ts --fix",
     "test": "jest"
   },
   "author": "Jazcash",
