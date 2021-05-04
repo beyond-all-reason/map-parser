@@ -120,7 +120,6 @@ export class MapParser {
 
             await fs.mkdir(outPath, { recursive: true });
 
-            const path7za = this.config.path7za ?? sevenBin.path7za;
             const extractStream = extractFull(sd7Path, outPath, {
                 $bin: this.config.path7za,
                 recursive: true,
