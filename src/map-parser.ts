@@ -40,7 +40,7 @@ const mapParserDefaultConfig: Partial<MapParserConfig> = {
     verbose: false,
     mipmapSize: 4,
     skipSmt: false,
-    path7za: undefined
+    path7za: sevenBin.path7za
 };
 
 export class MapParser {
