@@ -122,7 +122,7 @@ export class MapParser {
 
             const path7za = this.config.path7za ?? sevenBin.path7za;
             const extractStream = extractFull(sd7Path, outPath, {
-                $bin: path7za,
+                $bin: this.config.path7za,
                 recursive: true,
                 $cherryPick: ["*.smf", "*.smd", "*.smt", "mapinfo.lua"]
             });
