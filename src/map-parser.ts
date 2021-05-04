@@ -31,7 +31,7 @@ export interface MapParserConfig {
     skipSmt: boolean;
     /**
      * Path to the 7za executable. Will automatically resolve if left unspecified.
-     * @default undefined
+     * @default sevenBin.path7za
      */
     path7za?: string
 }
