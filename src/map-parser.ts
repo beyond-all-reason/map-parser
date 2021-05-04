@@ -29,12 +29,18 @@ export interface MapParserConfig {
      * @default false
      */
     skipSmt: boolean;
+    /**
+     * Path to the 7za executable. Will automatically resolve if left unspecified.
+     * @default sevenBin.path7za
+     */
+    path7za: string
 }
 
 const mapParserDefaultConfig: Partial<MapParserConfig> = {
     verbose: false,
     mipmapSize: 4,
-    skipSmt: false
+    skipSmt: false,
+    path7za: sevenBin.path7za
 };
 
 export class MapParser {
@@ -115,7 +121,7 @@ export class MapParser {
             await fs.mkdir(outPath, { recursive: true });
 
             const extractStream = extractFull(sd7Path, outPath, {
-                $bin: sevenBin.path7za,
+                $bin: this.config.path7za,
                 recursive: true,
                 $cherryPick: ["*.smf", "*.smd", "*.smt", "mapinfo.lua"]
             });
