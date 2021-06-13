@@ -117,8 +117,6 @@ export class MapParser {
             } as MapModel.Info;
 
             return {
-                fileName,
-                scriptName,
                 info,
                 heightMap: smf.heightMap,
                 metalMap: smf.metalMap,
@@ -467,6 +465,8 @@ export class MapParser {
         const width = options.textureMap.getWidth();
         const height = options.textureMap.getHeight();
         const heightMapRatio = this.config.mipmapSize / 4;
+        const heightMapWidth = Math.floor(width / heightMapRatio) + 1;
+        const heightMapHeight = Math.floor(height / heightMapRatio) + 1;
         const depthRange = options.maxDepth - options.minDepth;
         const waterLevelPercent = Math.abs(options.minDepth / depthRange);
         const waterLevelVal = waterLevelPercent * 255;
@@ -479,8 +479,8 @@ export class MapParser {
                 const pixelHex = options.textureMap.getPixelColor(x, y);
                 const pixelRGBA = Jimp.intToRGBA(pixelHex);
                 const heightMapY = Math.floor((y+1)/heightMapRatio);
-                const heightMapX = Math.floor((((x+1) % width) / heightMapRatio));
-                const heightValue = options.heightMapValues[(width+1) * heightMapY + heightMapX];
+                const heightMapX = Math.floor(((x+1) % width) / heightMapRatio);
+                const heightValue = options.heightMapValues[heightMapWidth * heightMapY + heightMapX];
                 if (heightValue <= waterLevelVal) {
                     const waterDepth = heightValue / waterLevelVal;
 

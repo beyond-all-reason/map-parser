@@ -3,9 +3,7 @@ import Jimp from "jimp";
 
 export namespace MapModel {
     export interface Map {
-        fileName: string;
-        scriptName: string;
-        info: Merge<MapInfo, SMD>;
+        info: Info;
         textureMap?: Jimp;
         heightMap: Jimp;
         miniMap: Jimp;
@@ -13,7 +11,7 @@ export namespace MapModel {
         typeMap: Jimp;
     }
 
-    export type Info = MapInfo & Pick<SMF, "mapWidthUnits" | "mapHeightUnits" | "minDepth" | "maxDepth" | "smtFileName"> & Pick<Map, "fileName" | "scriptName">;
+    export type Info = { fileName: string, scriptName: string } & MapInfo & Pick<SMF, "mapWidthUnits" | "mapHeightUnits" | "minDepth" | "maxDepth" | "smtFileName">;
     export interface MapInfo {
         name: string;
         shortname: string;
