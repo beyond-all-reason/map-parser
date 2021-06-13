@@ -60,7 +60,7 @@ export class MapParser {
 
     public async parseMap(mapFilePath: string) : Promise<Map> {
         const filePath = path.parse(mapFilePath);
-        const fileName = filePath .name;
+        const fileName = filePath.name;
         const fileExt = filePath.ext;
         const tempDir = path.join(os.tmpdir(), fileName);
 
