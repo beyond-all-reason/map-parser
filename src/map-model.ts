@@ -1,4 +1,4 @@
-import { Merge } from "jaz-ts-utils";
+import { Merge, Optionals } from "jaz-ts-utils";
 import Jimp from "jimp";
 
 export namespace MapModel {
@@ -87,4 +87,18 @@ export namespace MapModel {
         type: number;
         data: Buffer;
     }
+
+    export interface WaterOptions {
+        textureMap: Jimp;
+        heightMapValues: number[];
+        minDepth: number;
+        maxDepth: number;
+        rgbColor?: { r: number, g: number, b: number };
+        rgbModifier?: { r: number, g: number, b: number };
+    }
 }
+
+export const defaultWaterOptions: Optionals<MapModel.WaterOptions> = {
+    rgbColor: { r: 33, g: 35, b: 77 },
+    rgbModifier: { r: 1, g: 1.2, b: 1 }
+};

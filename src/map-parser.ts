@@ -86,7 +86,12 @@ export class MapParser {
             }
 
             if (this.config.water && smt) {
-                this.applyWater(smt, smf.heightMapValues, smf.minDepth, smf.maxDepth);
+                this.applyWater({
+                    textureMap: smt,
+                    heightMapValues: smf.heightMapValues,
+                    minDepth: smf.minDepth,
+                    maxDepth: smf.maxDepth
+                });
             }
 
             this.cleanup(tempDir);
@@ -99,7 +104,7 @@ export class MapParser {
             } else if (archive.smfName) {
                 scriptName = archive.smfName;
             }
-            
+
             const info = {
                 fileName,
                 scriptName,
@@ -453,40 +458,38 @@ export class MapParser {
         return Buffer.concat(tileRows);
     }
 
-    protected applyWater(textureMap: Jimp, heightMapValues: number[], minDepth: number, maxDepth: number) {
-        if (minDepth > 0) {
+    protected applyWater(options: MapModel.WaterOptions) {
+        if (options.minDepth > 0) {
             // water level is always at 0, so if minDepth is above 0 then map has no water
             return;
         }
 
-        const width = textureMap.getWidth()
-        const height = textureMap.getHeight()
+        const width = options.textureMap.getWidth();
+        const height = options.textureMap.getHeight();
         const heightMapRatio = this.config.mipmapSize / 4;
-        const depthRange = maxDepth - minDepth;
-        const waterLevelPercent = Math.abs(minDepth / depthRange);
+        const depthRange = options.maxDepth - options.minDepth;
+        const waterLevelPercent = Math.abs(options.minDepth / depthRange);
         const waterLevelVal = waterLevelPercent * 255;
-        const deepStrength = 255;
-        const shallowStrength = 10;
-        const redModifier = -0.8;
-        const greenModifier = -0.3;
-        const blueModifier = 0.4;
+        const redModifier = 1;
+        const greenModifier = 1.2;
+        const blueModifier = 1;
 
         for (let y=0; y<height; y++) {
             for (let x=0; x<width; x++) {
-                const pixelHex = textureMap.getPixelColor(x, y);
+                const pixelHex = options.textureMap.getPixelColor(x, y);
                 const pixelRGBA = Jimp.intToRGBA(pixelHex);
                 const heightMapY = Math.floor((y+1)/heightMapRatio);
                 const heightMapX = Math.floor((((x+1) % width) / heightMapRatio));
-                const heightValue = heightMapValues[(width+1) * heightMapY + heightMapX];
+                const heightValue = options.heightMapValues[(width+1) * heightMapY + heightMapX];
                 if (heightValue <= waterLevelVal) {
-                    const waterDepth = 1 - ((heightValue - shallowStrength) / waterLevelVal);
-                    const waterAmount = Math.floor(waterDepth * deepStrength);
+                    const waterDepth = heightValue / waterLevelVal;
 
-                    pixelRGBA.r = Math.min(Math.max(pixelRGBA.r + Math.floor(waterAmount * redModifier), 0), 255);
-                    pixelRGBA.g = Math.min(Math.max(pixelRGBA.g + Math.floor(waterAmount * greenModifier), 0), 255);
-                    pixelRGBA.b = Math.min(Math.max(pixelRGBA.b + Math.floor(waterAmount * blueModifier) , 0), 255);
+                    pixelRGBA.r = Math.min(Math.max(((33 + (pixelRGBA.r * waterDepth)) / 2) * redModifier, 0), 255);
+                    pixelRGBA.g = Math.min(Math.max(((35 + (pixelRGBA.g * waterDepth)) / 2) * greenModifier, 0), 255);
+                    pixelRGBA.b = Math.min(Math.max(((77 + (pixelRGBA.b * waterDepth)) / 2) * blueModifier, 0), 255);
+
                     const newHex = Jimp.rgbaToInt(pixelRGBA.r, pixelRGBA.g, pixelRGBA.b, pixelRGBA.a);
-                    textureMap.setPixelColor(newHex, x, y);
+                    options.textureMap.setPixelColor(newHex, x, y);
                 }
             }
         }
