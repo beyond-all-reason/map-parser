@@ -91,9 +91,11 @@ export class MapParser {
 
             let minHeight = smf.minDepth;
             let maxHeight = smf.maxDepth;
-            if (mapInfo?.smf?.minheight && mapInfo.smf.maxheight) {
-                minHeight = mapInfo?.smf.minheight;
-                maxHeight = mapInfo?.smf.maxheight;
+            if (mapInfo?.smf?.minheight) {
+                minHeight = mapInfo.smf.minheight;
+            }
+            if (mapInfo?.smf?.maxheight) {
+                maxHeight = mapInfo.smf.maxheight;
             }
 
             if (this.config.water && smt) {
