@@ -248,8 +248,9 @@ export class MapParser {
         const largeHeightMapValues = new BufferStream(heightMapBuffer).readInts(heightMapSize, 2, true);
         const heightMapValues: number[] = [];
         const heightMapColors = largeHeightMapValues.map((val, i) => {
-            const level = (val / 65536) * 255;
-            heightMapValues.push(level);
+            const percent = val / 65536;
+            heightMapValues.push(percent);
+            const level = percent * 255;
             return [level, level, level, 255];
         });
         const heightMap = new Jimp({
@@ -480,7 +481,6 @@ export class MapParser {
         const heightMapHeight = Math.floor(height / heightMapRatio) + 1;
         const depthRange = options.maxHeight - options.minHeight;
         const waterLevelPercent = Math.abs(options.minHeight / depthRange);
-        const waterLevelVal = waterLevelPercent * 255;
         const color = options.rgbColor ?? defaultWaterOptions.rgbColor;
         const colorModifier = options.rgbColor ?? defaultWaterOptions.rgbModifier;
 
@@ -491,13 +491,12 @@ export class MapParser {
                 const heightMapY = Math.floor((y+1)/heightMapRatio);
                 const heightMapX = Math.floor(((x+1) % width) / heightMapRatio);
                 const heightValue = options.heightMapValues[heightMapWidth * heightMapY + heightMapX];
-                if (heightValue <= waterLevelVal) {
-                    const waterDepth = heightValue / waterLevelVal;
+                if (heightValue < waterLevelPercent - 0.01) {
+                    const waterDepth = heightValue / waterLevelPercent;
 
                     pixelRGBA.r = Math.min(Math.max(((color.r + (pixelRGBA.r * waterDepth)) / 2) * colorModifier.r, 0), 255);
                     pixelRGBA.g = Math.min(Math.max(((color.g + (pixelRGBA.g * waterDepth)) / 2) * colorModifier.g, 0), 255);
                     pixelRGBA.b = Math.min(Math.max(((color.b + (pixelRGBA.b * waterDepth)) / 2) * colorModifier.b, 0), 255);
-                    colorModifier
                     const newHex = Jimp.rgbaToInt(pixelRGBA.r, pixelRGBA.g, pixelRGBA.b, pixelRGBA.a);
                     options.textureMap.setPixelColor(newHex, x, y);
                 }
