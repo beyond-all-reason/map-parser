@@ -34,13 +34,19 @@ export interface MapParserConfig {
      * @default sevenBin.path7za
      */
     path7za: string
+    /**
+     * Retroactively draw water on top of map texture based on the map's depth
+     * @default true
+     */
+    water: boolean;
 }
 
 const mapParserDefaultConfig: Partial<MapParserConfig> = {
     verbose: false,
     mipmapSize: 4,
     skipSmt: false,
-    path7za: sevenBin.path7za
+    path7za: sevenBin.path7za,
+    water: true
 };
 
 export class MapParser {
@@ -65,11 +71,11 @@ export class MapParser {
 
             const archive = fileExt === ".sd7" ? await this.extractSd7(mapFilePath, tempDir) : await this.extractSdz(mapFilePath, tempDir);
 
-            let info: Merge<MapModel.MapInfo, MapModel.SMD>;
+            let mapInfo: Merge<MapModel.MapInfo, MapModel.SMD>;
             if (archive.mapInfo) {
-                info = await this.parseMapInfo(archive.mapInfo);
+                mapInfo = await this.parseMapInfo(archive.mapInfo);
             } else {
-                info = await this.parseSMD(archive.smd!);
+                mapInfo = await this.parseSMD(archive.smd!);
             }
 
             const smf = await this.parseSMF(archive.smf);
@@ -79,22 +85,36 @@ export class MapParser {
                 smt = await this.parseSMT(archive.smt, smf.tileIndexMap, smf.mapWidthUnits, smf.mapHeightUnits, this.config.mipmapSize);
             }
 
-            let scriptName = "";
-            if (info.name && info.version && info.name.includes(info.version!)) {
-                scriptName = info.name;
-            } else if (info.name) {
-                scriptName = `${info.name} ${info.version}`;
-            } else if (archive.smfName) {
-                scriptName = archive.smfName;
+            if (this.config.water && smt) {
+                this.applyWater(smt, smf.heightMapValues, smf.minDepth, smf.maxDepth);
             }
 
             this.cleanup(tempDir);
+
+            let scriptName = "";
+            if (mapInfo.name && mapInfo.version && mapInfo.name.includes(mapInfo.version!)) {
+                scriptName = mapInfo.name;
+            } else if (mapInfo.name) {
+                scriptName = `${mapInfo.name} ${mapInfo.version}`;
+            } else if (archive.smfName) {
+                scriptName = archive.smfName;
+            }
+            
+            const info = {
+                fileName,
+                scriptName,
+                ...mapInfo,
+                mapWidthUnits: smf.mapWidthUnits,
+                mapHeightUnits: smf.mapHeightUnits,
+                minDepth: smf.minDepth,
+                maxDepth: smf.maxDepth,
+                smtFileName: smf.smtFileName
+            } as MapModel.Info;
 
             return {
                 fileName,
                 scriptName,
                 info,
-                meta: smf,
                 heightMap: smf.heightMap,
                 metalMap: smf.metalMap,
                 miniMap: smf.miniMap,
@@ -104,6 +124,7 @@ export class MapParser {
         } catch (err: any) {
             this.cleanup(tempDir);
             sigintBinding.removeAllListeners();
+            console.error(err);
             throw err;
         }
     }
@@ -217,9 +238,11 @@ export class MapParser {
 
         const heightMapSize = (mapWidth+1) * (mapHeight+1);
         const heightMapBuffer = smfBuffer.slice(heightMapIndex, heightMapIndex + heightMapSize * 2);
-        const heightMapValues = new BufferStream(heightMapBuffer).readInts(heightMapSize, 2, true);
-        const heightMapColors = heightMapValues.map(val => {
+        const largeHeightMapValues = new BufferStream(heightMapBuffer).readInts(heightMapSize, 2, true);
+        const heightMapValues: number[] = [];
+        const heightMapColors = largeHeightMapValues.map((val, i) => {
             const level = (val / 65536) * 255;
+            heightMapValues.push(level);
             return [level, level, level, 255];
         });
         const heightMap = new Jimp({
@@ -271,7 +294,7 @@ export class MapParser {
             magic, version, id, mapWidth, mapWidthUnits, mapHeight, mapHeightUnits, squareSize, texelsPerSquare, tileSize, minDepth, maxDepth,
             heightMapIndex, typeMapIndex, tileIndexMapIndex, miniMapIndex, metalMapIndex, featureMapIndex, noOfExtraHeaders, extraHeaders: [],
             numOfTileFiles, numOfTilesInAllFiles, numOfTilesInThisFile, smtFileName,
-            heightMap, typeMap, miniMap, metalMap, tileIndexMap,
+            heightMap, typeMap, miniMap, metalMap, tileIndexMap, heightMapValues,
             features: [] // TODO
         };
     }
@@ -428,6 +451,45 @@ export class MapParser {
         }
 
         return Buffer.concat(tileRows);
+    }
+
+    protected applyWater(textureMap: Jimp, heightMapValues: number[], minDepth: number, maxDepth: number) {
+        if (minDepth > 0) {
+            // water level is always at 0, so if minDepth is above 0 then map has no water
+            return;
+        }
+
+        const width = textureMap.getWidth()
+        const height = textureMap.getHeight()
+        const heightMapRatio = this.config.mipmapSize / 4;
+        const depthRange = maxDepth - minDepth;
+        const waterLevelPercent = Math.abs(minDepth / depthRange);
+        const waterLevelVal = waterLevelPercent * 255;
+        const deepStrength = 255;
+        const shallowStrength = 10;
+        const redModifier = -0.8;
+        const greenModifier = -0.3;
+        const blueModifier = 0.4;
+
+        for (let y=0; y<height; y++) {
+            for (let x=0; x<width; x++) {
+                const pixelHex = textureMap.getPixelColor(x, y);
+                const pixelRGBA = Jimp.intToRGBA(pixelHex);
+                const heightMapY = Math.floor((y+1)/heightMapRatio);
+                const heightMapX = Math.floor((((x+1) % width) / heightMapRatio));
+                const heightValue = heightMapValues[(width+1) * heightMapY + heightMapX];
+                if (heightValue <= waterLevelVal) {
+                    const waterDepth = 1 - ((heightValue - shallowStrength) / waterLevelVal);
+                    const waterAmount = Math.floor(waterDepth * deepStrength);
+
+                    pixelRGBA.r = Math.min(Math.max(pixelRGBA.r + Math.floor(waterAmount * redModifier), 0), 255);
+                    pixelRGBA.g = Math.min(Math.max(pixelRGBA.g + Math.floor(waterAmount * greenModifier), 0), 255);
+                    pixelRGBA.b = Math.min(Math.max(pixelRGBA.b + Math.floor(waterAmount * blueModifier) , 0), 255);
+                    const newHex = Jimp.rgbaToInt(pixelRGBA.r, pixelRGBA.g, pixelRGBA.b, pixelRGBA.a);
+                    textureMap.setPixelColor(newHex, x, y);
+                }
+            }
+        }
     }
 
     protected async cleanup(tmpDir: string) {

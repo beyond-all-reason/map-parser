@@ -6,7 +6,6 @@ export namespace MapModel {
         fileName: string;
         scriptName: string;
         info: Merge<MapInfo, SMD>;
-        meta: SMF;
         textureMap?: Jimp;
         heightMap: Jimp;
         miniMap: Jimp;
@@ -14,6 +13,7 @@ export namespace MapModel {
         typeMap: Jimp;
     }
 
+    export type Info = MapInfo & Pick<SMF, "mapWidthUnits" | "mapHeightUnits" | "minDepth" | "maxDepth" | "smtFileName"> & Pick<Map, "fileName" | "scriptName">;
     export interface MapInfo {
         name: string;
         shortname: string;
@@ -79,6 +79,7 @@ export namespace MapModel {
         metalMap: Jimp;
         tileIndexMap: number[];
         features: any; // TODO
+        heightMapValues: number[];
     }
 
     export interface SMFExtraHeader {
