@@ -1,15 +1,17 @@
 import sevenBin from "7zip-bin";
 import { existsSync, promises as fs } from "fs";
 import { glob } from "glob";
-import { Merge } from "jaz-ts-utils";
+import { DeepPartial } from "jaz-ts-utils";
 import Jimp from "jimp";
 import { extractFull } from "node-7z";
 import * as StreamZip from "node-stream-zip";
 import * as os from "os";
 import * as path from "path";
+import * as luaparse from "luaparse";
+import { Expression, LocalStatement, ReturnStatement, StringLiteral, TableConstructorExpression, TableKeyString } from "luaparse";
 
 import { BufferStream } from "./buffer-stream";
-import { MapModel } from "./map-model";
+import { defaultWaterOptions, Map, MapInfo, SMD, SMF, WaterOptions } from "./map-model";
 const dxt = require("dxt-js");
 
 // https://github.com/spring/spring/tree/develop/rts/Map
@@ -56,7 +58,7 @@ export class MapParser {
         this.config = Object.assign({}, mapParserDefaultConfig as Required<MapParserConfig>, config);
     }
 
-    public async parseMap(mapFilePath: string) : Promise<MapModel.Map> {
+    public async parseMap(mapFilePath: string) : Promise<Map> {
         const filePath = path.parse(mapFilePath);
         const fileName = filePath .name;
         const fileExt = filePath.ext;
@@ -71,11 +73,13 @@ export class MapParser {
 
             const archive = fileExt === ".sd7" ? await this.extractSd7(mapFilePath, tempDir) : await this.extractSdz(mapFilePath, tempDir);
 
-            let mapInfo: Merge<MapModel.MapInfo, MapModel.SMD>;
+            let mapInfo: DeepPartial<MapInfo> | undefined;
+            let smd: SMD | undefined;
+
             if (archive.mapInfo) {
                 mapInfo = await this.parseMapInfo(archive.mapInfo);
             } else {
-                mapInfo = await this.parseSMD(archive.smd!);
+                smd = await this.parseSMD(archive.smd!);
             }
 
             const smf = await this.parseSMF(archive.smf);
@@ -85,39 +89,39 @@ export class MapParser {
                 smt = await this.parseSMT(archive.smt, smf.tileIndexMap, smf.mapWidthUnits, smf.mapHeightUnits, this.config.mipmapSize);
             }
 
+            let minHeight = smf.minDepth;
+            let maxHeight = smf.maxDepth;
+            if (mapInfo?.smf?.minheight && mapInfo.smf.maxheight) {
+                minHeight = mapInfo?.smf.minheight;
+                maxHeight = mapInfo?.smf.maxheight;
+            }
+
             if (this.config.water && smt) {
                 this.applyWater({
                     textureMap: smt,
                     heightMapValues: smf.heightMapValues,
-                    minDepth: smf.minDepth,
-                    maxDepth: smf.maxDepth
+                    minHeight,
+                    maxHeight
                 });
             }
 
             this.cleanup(tempDir);
 
             let scriptName = "";
-            if (mapInfo.name && mapInfo.version && mapInfo.name.includes(mapInfo.version!)) {
+            if (mapInfo && mapInfo.name && mapInfo.version && mapInfo.name.includes(mapInfo.version!)) {
                 scriptName = mapInfo.name;
-            } else if (mapInfo.name) {
+            } else if (mapInfo && mapInfo.name) {
                 scriptName = `${mapInfo.name} ${mapInfo.version}`;
             } else if (archive.smfName) {
                 scriptName = archive.smfName;
             }
 
-            const info = {
+            return {
                 fileName,
                 scriptName,
-                ...mapInfo,
-                mapWidthUnits: smf.mapWidthUnits,
-                mapHeightUnits: smf.mapHeightUnits,
-                minDepth: smf.minDepth,
-                maxDepth: smf.maxDepth,
-                smtFileName: smf.smtFileName
-            } as MapModel.Info;
-
-            return {
-                info,
+                mapInfo,
+                smd,
+                smf,
                 heightMap: smf.heightMap,
                 metalMap: smf.metalMap,
                 miniMap: smf.miniMap,
@@ -198,7 +202,7 @@ export class MapParser {
         });
     }
 
-    protected async parseSMF(smfBuffer: Buffer): Promise<MapModel.SMF> {
+    protected async parseSMF(smfBuffer: Buffer): Promise<SMF> {
         if (this.config.verbose) {
             console.log("Parsing .smf");
         }
@@ -358,50 +362,57 @@ export class MapParser {
         }).background(0x000000);
     }
 
-    protected async parseMapInfo(buffer: Buffer): Promise<MapModel.MapInfo> {
+    protected async parseMapInfo(buffer: Buffer): Promise<MapInfo> {
         if (this.config.verbose) {
             console.log("Parsing mapinfo.lua");
         }
 
-        const str = buffer.toString();
+        const mapInfoStr = buffer.toString();
+        const parsedMapInfo = luaparse.parse(mapInfoStr, { encodingMode: "x-user-defined", comments: false });
+        const rootObj = parsedMapInfo.body[0] as LocalStatement;
+        const rootTable = rootObj.init.find(block => block.type === "TableConstructorExpression") as TableConstructorExpression;
 
-        // yes, all this regex is messy and expensive. no, i don't care
+        const obj = this.parseMapInfoFields(rootTable.fields);
 
-        const name = str.match(/(?!t).name\s*\=\s*\"(.*?)\"/i)?.[1]!;
-        const shortname = str.match(/shortname\s*\=\s*\"(.*?)\"/i)?.[1]!;
-        const description = str.match(/description\s*\=\s*\"(.*?)\"/i)?.[1]!;
-        const author = str.match(/author\s*\=\s*\"(.*?)\"/i)?.[1]!;
-        const version = str.match(/version\s*\=\s*\"(.*?)\"/i)?.[1]!;
-        const mapfile = str.match(/mapfile\s*\=\s*\"(.*?)\"/i)?.[1]!;
-        const modtype = Number(str.match(/modtype\s*\=\s*(.*?)\,/i)?.[1]);
-        const mapHardness = Number(str.match(/maphardness\s*\=\s*(.*?)\,/i)?.[1]);
-        const notDeformable = str.match(/notDeformable\s*\=\s*(.*?)\,/i)?.[1] === "true";
-        const gravity = Number(str.match(/gravity\s*\=\s*(.*?)\,/i)?.[1]);
-        const tidalStrength = Number(str.match(/tidalStrength\s*\=\s*(.*?)\,/i)?.[1]);
-        const maxMetal = Number(str.match(/maxMetal\s*\=\s*(.*?)\,/i)?.[1]);
-        const extractorRadius = Number(str.match(/extractorRadius\s*\=\s*(.*?)\,/i)?.[1]);
-        const voidWater = str.match(/voidWater\s*\=\s*(.*?)\,/i)?.[1] === "true";
-        const voidGround = str.match(/voidGround\s*\=\s*(.*?)\,/i)?.[1] === "true";
-        const autoShowMetal = str.match(/autoShowMetal\s*\=\s*(.*?)\,/i)?.[1] === "true";
-        const minWind = Number(str.match(/minWind\s*\=\s*(.*?)\,/i)?.[1]);
-        const maxWind = Number(str.match(/maxWind\s*\=\s*(.*?)\,/i)?.[1]);
-
-        const startPosMatches = str.matchAll(/startPos\s*\=\s*\{\s*x\s*\=\s*(?<x>\d*)\s*\,\s*z\s*\=\s*(?<z>\d*)/gm);
-        const startPositions: Array<{ x: number, z: number }> = [];
-        let teamId = 0;
-        for (const match of startPosMatches) {
-            const { x, z } = match.groups!;
-            startPositions[teamId] = { x: Number(x), z: Number(z) };
-            teamId++;
-        }
-
-        return {
-            name, shortname, description, author, version, mapfile, modtype, mapHardness, notDeformable, gravity, tidalStrength,
-            maxMetal, extractorRadius, voidWater, voidGround, autoShowMetal, minWind, maxWind, startPositions
-        };
+        return obj as MapInfo;
     }
 
-    protected async parseSMD(buffer: Buffer) : Promise<MapModel.SMD> {
+    protected parseMapInfoFields(fields: (luaparse.TableKey | luaparse.TableKeyString | luaparse.TableValue)[]) {
+        const arr: any = [];
+        const obj: any = {};
+
+        for (const field of fields) {
+            if (field.type === "TableKeyString") {
+                if (field.value.type === "StringLiteral" || field.value.type === "NumericLiteral" ||field.value.type === "BooleanLiteral") {
+                    obj[field.key.name] = field.value.value;
+                } else if (field.value.type === "TableConstructorExpression") {
+                    obj[field.key.name] = this.parseMapInfoFields(field.value.fields);
+                }
+            } else if (field.type === "TableValue") {
+                if (field.value.type === "StringLiteral" || field.value.type === "NumericLiteral" ||field.value.type === "BooleanLiteral") {
+                    const val = field.value.value;
+                    arr.push(val);
+                }
+            } else if (field.type === "TableKey") {
+                if (field.value.type === "StringLiteral" || field.value.type === "NumericLiteral" ||field.value.type === "BooleanLiteral") {
+                    const val = field.value.value;
+                    if (field.key.type === "NumericLiteral") {
+                        arr[field.key.type] = val;
+                    }
+                } else if (field.value.type === "TableConstructorExpression") {
+                    arr.push(this.parseMapInfoFields(field.value.fields));
+                }
+            }
+        }
+
+        if (arr.length) {
+            return arr;
+        }
+        
+        return obj;
+    }
+
+    protected async parseSMD(buffer: Buffer) : Promise<SMD> {
         if (this.config.verbose) {
             console.log("Parsing .smd");
         }
@@ -456,8 +467,8 @@ export class MapParser {
         return Buffer.concat(tileRows);
     }
 
-    protected applyWater(options: MapModel.WaterOptions) {
-        if (options.minDepth > 0) {
+    protected applyWater(options: WaterOptions) {
+        if (options.minHeight > 0) {
             // water level is always at 0, so if minDepth is above 0 then map has no water
             return;
         }
@@ -467,12 +478,11 @@ export class MapParser {
         const heightMapRatio = this.config.mipmapSize / 4;
         const heightMapWidth = Math.floor(width / heightMapRatio) + 1;
         const heightMapHeight = Math.floor(height / heightMapRatio) + 1;
-        const depthRange = options.maxDepth - options.minDepth;
-        const waterLevelPercent = Math.abs(options.minDepth / depthRange);
+        const depthRange = options.maxHeight - options.minHeight;
+        const waterLevelPercent = Math.abs(options.minHeight / depthRange);
         const waterLevelVal = waterLevelPercent * 255;
-        const redModifier = 1;
-        const greenModifier = 1.2;
-        const blueModifier = 1;
+        const color = options.rgbColor ?? defaultWaterOptions.rgbColor;
+        const colorModifier = options.rgbColor ?? defaultWaterOptions.rgbModifier;
 
         for (let y=0; y<height; y++) {
             for (let x=0; x<width; x++) {
@@ -484,10 +494,10 @@ export class MapParser {
                 if (heightValue <= waterLevelVal) {
                     const waterDepth = heightValue / waterLevelVal;
 
-                    pixelRGBA.r = Math.min(Math.max(((33 + (pixelRGBA.r * waterDepth)) / 2) * redModifier, 0), 255);
-                    pixelRGBA.g = Math.min(Math.max(((35 + (pixelRGBA.g * waterDepth)) / 2) * greenModifier, 0), 255);
-                    pixelRGBA.b = Math.min(Math.max(((77 + (pixelRGBA.b * waterDepth)) / 2) * blueModifier, 0), 255);
-
+                    pixelRGBA.r = Math.min(Math.max(((color.r + (pixelRGBA.r * waterDepth)) / 2) * colorModifier.r, 0), 255);
+                    pixelRGBA.g = Math.min(Math.max(((color.g + (pixelRGBA.g * waterDepth)) / 2) * colorModifier.g, 0), 255);
+                    pixelRGBA.b = Math.min(Math.max(((color.b + (pixelRGBA.b * waterDepth)) / 2) * colorModifier.b, 0), 255);
+                    colorModifier
                     const newHex = Jimp.rgbaToInt(pixelRGBA.r, pixelRGBA.g, pixelRGBA.b, pixelRGBA.a);
                     options.textureMap.setPixelColor(newHex, x, y);
                 }
