@@ -89,14 +89,8 @@ export class MapParser {
                 smt = await this.parseSMT(archive.smt, smf.tileIndexMap, smf.mapWidthUnits, smf.mapHeightUnits, this.config.mipmapSize);
             }
 
-            let minHeight = smf.minDepth;
-            let maxHeight = smf.maxDepth;
-            if (mapInfo?.smf?.minheight) {
-                minHeight = mapInfo.smf.minheight;
-            }
-            if (mapInfo?.smf?.maxheight) {
-                maxHeight = mapInfo.smf.maxheight;
-            }
+            const minHeight = mapInfo?.smf?.minheight ?? smd?.minHeight ?? smf?.minDepth;
+            const maxHeight = mapInfo?.smf?.maxheight ?? smd?.maxHeight ?? smf?.maxDepth;
 
             if (this.config.water && smt) {
                 this.applyWater({
@@ -250,7 +244,7 @@ export class MapParser {
         const largeHeightMapValues = new BufferStream(heightMapBuffer).readInts(heightMapSize, 2, true);
         const heightMapValues: number[] = [];
         const heightMapColors = largeHeightMapValues.map((val, i) => {
-            const percent = val / 65536;
+            const percent = val / 65536; // 2 bytes
             heightMapValues.push(percent);
             const level = percent * 255;
             return [level, level, level, 255];
@@ -377,6 +371,8 @@ export class MapParser {
 
         const obj = this.parseMapInfoFields(rootTable.fields);
 
+        console.log(obj);
+
         return obj as MapInfo;
     }
 
@@ -386,22 +382,25 @@ export class MapParser {
 
         for (const field of fields) {
             if (field.type === "TableKeyString") {
-                if (field.value.type === "StringLiteral" || field.value.type === "NumericLiteral" ||field.value.type === "BooleanLiteral") {
+                if (field.value.type === "StringLiteral" || field.value.type === "NumericLiteral" || field.value.type === "BooleanLiteral") {
                     obj[field.key.name] = field.value.value;
+                } else if (field.value.type === "UnaryExpression" && field.value.argument.type === "NumericLiteral") {
+                    obj[field.key.name] = -field.value.argument.value;
                 } else if (field.value.type === "TableConstructorExpression") {
                     obj[field.key.name] = this.parseMapInfoFields(field.value.fields);
                 }
             } else if (field.type === "TableValue") {
-                if (field.value.type === "StringLiteral" || field.value.type === "NumericLiteral" ||field.value.type === "BooleanLiteral") {
+                if (field.value.type === "StringLiteral" || field.value.type === "NumericLiteral" || field.value.type === "BooleanLiteral") {
                     const val = field.value.value;
                     arr.push(val);
                 }
             } else if (field.type === "TableKey") {
-                if (field.value.type === "StringLiteral" || field.value.type === "NumericLiteral" ||field.value.type === "BooleanLiteral") {
-                    const val = field.value.value;
+                if (field.value.type === "StringLiteral" || field.value.type === "NumericLiteral" || field.value.type === "BooleanLiteral") {
                     if (field.key.type === "NumericLiteral") {
-                        arr[field.key.type] = val;
+                        arr[field.key.type] = field.value.value;
                     }
+                } else if (field.value.type === "UnaryExpression" && field.value.argument.type === "NumericLiteral") {
+                    arr[field.key.type] = -field.value.argument.value;
                 } else if (field.value.type === "TableConstructorExpression") {
                     arr.push(this.parseMapInfoFields(field.value.fields));
                 }
@@ -422,30 +421,35 @@ export class MapParser {
 
         const smd = buffer.toString();
 
-        const strPairs = smd.match(/(\w*)\=(.*?)\;/gm)!;
-        const strObj: { [key: string]: string } = {};
+        const matches = smd.matchAll(/\s(?<key>\w+)\s*\=\s?(?<val>.*?)\;/g);
+        const obj: { [key: string]: any } = {};
         const startPositions: Array<{ x: number, z: number }> = [];
+        let startPosIndex = 0;
+        for (const match of matches) {
+            const key = match.groups!.key;
+            let val: string | number = Number(match.groups!.val);
+            if (val === NaN) val = match.groups!.val;
 
-        for (const strPair of strPairs) {
-            const [key, val] = strPair.slice(0, strPair.length - 1).split("=");
             if (key === "StartPosX") {
                 startPositions.push({ x: Number(val), z: 0 });
             } else if (key === "StartPosZ") {
                 startPositions[startPositions.length - 1].z = Number(val);
             } else {
-                strObj[key] = val;
+                obj[key] = val;
             }
         }
 
         return {
-            description: strObj.Description,
-            tidalStrength: Number(strObj.TidalStrength),
-            gravity: Number(strObj.Gravity),
-            maxMetal: Number(strObj.MaxMetal),
-            extractorRadius: Number(strObj.ExtractorRadius),
-            mapHardness: Number(strObj.MapHardness),
-            minWind: Number(strObj.MinWind),
-            maxWind: Number(strObj.MaxWind),
+            description: obj.Description,
+            tidalStrength: obj.TidalStrength,
+            gravity: obj.Gravity,
+            maxMetal: obj.MaxMetal,
+            extractorRadius: obj.ExtractorRadius,
+            mapHardness: obj.MapHardness,
+            minWind: obj.MinWind,
+            maxWind: obj.MaxWind,
+            minHeight: obj.minheight,
+            maxHeight: obj.maxheight,
             startPositions
         };
     }
@@ -471,7 +475,7 @@ export class MapParser {
     }
 
     protected applyWater(options: WaterOptions) {
-        if (options.minHeight > 0) {
+        if (options.minHeight >= 0) {
             // water level is always at 0, so if minDepth is above 0 then map has no water
             return;
         }
@@ -493,7 +497,7 @@ export class MapParser {
                 const heightMapY = Math.floor((y+1)/heightMapRatio);
                 const heightMapX = Math.floor(((x+1) % width) / heightMapRatio);
                 const heightValue = options.heightMapValues[heightMapWidth * heightMapY + heightMapX];
-                if (heightValue < waterLevelPercent - 0.01) {
+                if (heightValue < waterLevelPercent) {
                     const waterDepth = heightValue / waterLevelPercent;
 
                     pixelRGBA.r = Math.min(Math.max(((color.r + (pixelRGBA.r * waterDepth)) / 2) * colorModifier.r, 0), 255);

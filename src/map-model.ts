@@ -23,6 +23,8 @@ export interface SMD {
     mapHardness: number;
     minWind: number;
     maxWind: number;
+    minHeight?: number;
+    maxHeight?: number;
     startPositions: Array<{ x: number, z: number }>;
 }
 
