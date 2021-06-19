@@ -371,8 +371,6 @@ export class MapParser {
 
         const obj = this.parseMapInfoFields(rootTable.fields);
 
-        console.log(obj);
-
         return obj as MapInfo;
     }
 
