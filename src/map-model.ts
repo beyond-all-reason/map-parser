@@ -1,7 +1,7 @@
 import { DeepPartial, Merge, Optionals } from "jaz-ts-utils";
 import Jimp from "jimp";
 
-export interface Map {
+export interface SpringMap {
     fileName: string;
     scriptName: string;
     mapInfo?: DeepPartial<MapInfo>;
@@ -12,6 +12,7 @@ export interface Map {
     miniMap: Jimp;
     metalMap: Jimp;
     typeMap: Jimp;
+    specularMap?: Jimp;
 }
 
 export interface SMD {

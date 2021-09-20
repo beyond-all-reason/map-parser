@@ -11,7 +11,7 @@ import * as luaparse from "luaparse";
 import { Expression, LocalStatement, ReturnStatement, StringLiteral, TableConstructorExpression, TableKeyString } from "luaparse";
 
 import { BufferStream } from "./buffer-stream";
-import { defaultWaterOptions, Map, MapInfo, SMD, SMF, WaterOptions } from "./map-model";
+import { defaultWaterOptions, SpringMap, MapInfo, SMD, SMF, WaterOptions } from "./map-model";
 const dxt = require("dxt-js");
 
 // https://github.com/spring/spring/tree/develop/rts/Map
@@ -58,7 +58,7 @@ export class MapParser {
         this.config = Object.assign({}, mapParserDefaultConfig as Required<MapParserConfig>, config);
     }
 
-    public async parseMap(mapFilePath: string) : Promise<Map> {
+    public async parseMap(mapFilePath: string) : Promise<SpringMap> {
         const filePath = path.parse(mapFilePath);
         const fileName = filePath.name;
         const fileExt = filePath.ext;
@@ -122,7 +122,8 @@ export class MapParser {
                 metalMap: smf.metalMap,
                 miniMap: smf.miniMap,
                 typeMap: smf.typeMap,
-                textureMap: smt
+                textureMap: smt,
+                specularMap: archive.specular
             };
         } catch (err: any) {
             this.cleanup(tempDir);
@@ -132,7 +133,7 @@ export class MapParser {
         }
     }
 
-    protected async extractSd7(sd7Path: string, outPath: string): Promise<{ smf: Buffer, smt: Buffer, smd?: Buffer, smfName?: string, mapInfo?: Buffer }> {
+    protected async extractSd7(sd7Path: string, outPath: string): Promise<{ smf: Buffer, smt: Buffer, smd?: Buffer, smfName?: string, mapInfo?: Buffer, specular?: Jimp }> {
         return new Promise(async resolve => {
             if (this.config.verbose) {
                 console.log(`Extracting .sd7 to ${outPath}`);
@@ -147,27 +148,16 @@ export class MapParser {
             const extractStream = extractFull(sd7Path, outPath, {
                 $bin: this.config.path7za,
                 recursive: true,
-                $cherryPick: ["*.smf", "*.smd", "*.smt", "mapinfo.lua"]
+                $cherryPick: ["*.smf", "*.smd", "*.smt", "mapinfo.lua", "*.png"]
             });
 
             extractStream.on("end", async () => {
-                const smfPath = glob.sync(`${outPath}/**/*.smf`)[0];
-                const smtPath = glob.sync(`${outPath}/**/*.smt`)[0];
-                const smdPath = glob.sync(`${outPath}/**/*.smd`)[0];
-                const mapInfoPath = glob.sync(`${outPath}/mapinfo.lua`)[0];
-
-                const smf = await fs.readFile(smfPath);
-                const smfName = smfPath ? path.parse(smfPath).name : undefined;
-                const smt = await fs.readFile(smtPath);
-                const smd = smdPath ? await fs.readFile(smdPath) : undefined;
-                const mapInfo = mapInfoPath ? await fs.readFile(mapInfoPath) : undefined;
-
-                resolve({ smf, smt, smd, smfName, mapInfo });
+                resolve(await this.extractArchiveFiles(outPath));
             });
         });
     }
 
-    protected extractSdz(sdzPath: string, outPath: string): Promise<{ smf: Buffer, smt: Buffer, smd?: Buffer, smfName?: string, mapInfo?: Buffer }> {
+    protected extractSdz(sdzPath: string, outPath: string): Promise<{ smf: Buffer, smt: Buffer, smd?: Buffer, smfName?: string, mapInfo?: Buffer, specular?: Jimp }> {
         return new Promise(async resolve => {
             if (this.config.verbose) {
                 console.log(`Extracting .sdz to ${outPath}`);
@@ -183,19 +173,25 @@ export class MapParser {
             await zip.extract("maps/", outPath);
             await (zip as any).close();
 
-            const smfPath = glob.sync(`${outPath}/**/*.smf`)[0];
-            const smtPath = glob.sync(`${outPath}/**/*.smt`)[0];
-            const smdPath = glob.sync(`${outPath}/**/*.smd`)[0];
-            const mapInfoPath = glob.sync(`${outPath}/mapinfo.lua`)[0];
-
-            const smf = await fs.readFile(smfPath);
-            const smfName = smfPath ? path.parse(smfPath).name : undefined;
-            const smt = await fs.readFile(smtPath);
-            const smd = smdPath ? await fs.readFile(smdPath) : undefined;
-            const mapInfo = mapInfoPath ? await fs.readFile(mapInfoPath) : undefined;
-
-            resolve({ smf, smt, smd, smfName, mapInfo });
+            return this.extractArchiveFiles(outPath);
         });
+    }
+
+    protected async extractArchiveFiles(outPath: string) {
+        const smfPath = glob.sync(`${outPath}/**/*.smf`)[0];
+        const smtPath = glob.sync(`${outPath}/**/*.smt`)[0];
+        const smdPath = glob.sync(`${outPath}/**/*.smd`)[0];
+        const mapInfoPath = glob.sync(`${outPath}/mapinfo.lua`)[0];
+        const specularPath = glob.sync(`${outPath}/**/*spec*.png`)[0];
+
+        const smf = await fs.readFile(smfPath);
+        const smfName = smfPath ? path.parse(smfPath).name : undefined;
+        const smt = await fs.readFile(smtPath);
+        const smd = smdPath ? await fs.readFile(smdPath) : undefined;
+        const mapInfo = mapInfoPath ? await fs.readFile(mapInfoPath) : undefined;
+        const specular = specularPath ? await Jimp.read(specularPath) : undefined;
+
+        return { smf, smt, smd, smfName, mapInfo, specular };
     }
 
     protected async parseSMF(smfBuffer: Buffer): Promise<SMF> {
