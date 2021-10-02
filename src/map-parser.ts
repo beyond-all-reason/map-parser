@@ -104,7 +104,7 @@ export class MapParser {
 
             if (mapInfo) {
                 mapInfo.minDepth = minHeight;
-                mapInfo.minDepth = maxHeight;
+                mapInfo.maxDepth = maxHeight;
             }
 
             this.cleanup(tempDir);
