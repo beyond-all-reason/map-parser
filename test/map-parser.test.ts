@@ -27,6 +27,9 @@ it("full-export", async () => {
 
     await map.miniMap.quality(50).writeAsync("test/mini.jpg");
     expect(fs.existsSync("test/mini.jpg")).toBe(true);
+
+    // await map.specularMap.writeAsync("test/specular.png");
+    // expect(fs.existsSync("test/specular.png")).toBe(true);
 }, 20000);
 
 it("minimap-export", async () => {

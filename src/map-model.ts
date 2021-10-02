@@ -1,4 +1,4 @@
-import { DeepPartial, Merge, Optionals } from "jaz-ts-utils";
+import { DeepPartial, Optionals } from "jaz-ts-utils";
 import Jimp from "jimp";
 
 export interface SpringMap {

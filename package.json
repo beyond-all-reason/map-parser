@@ -38,7 +38,6 @@
   "dependencies": {
     "7zip-bin": "^5.0.3",
     "@types/jimp": "^0.2.28",
-    "dxt-js": "0.0.3",
     "glob": "^7.1.6",
     "jaz-signals": "^0.3.0",
     "jaz-ts-utils": "^1.0.0",

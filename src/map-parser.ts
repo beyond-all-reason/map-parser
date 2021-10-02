@@ -8,11 +8,12 @@ import * as StreamZip from "node-stream-zip";
 import * as os from "os";
 import * as path from "path";
 import * as luaparse from "luaparse";
-import { Expression, LocalStatement, ReturnStatement, StringLiteral, TableConstructorExpression, TableKeyString } from "luaparse";
+import { LocalStatement, TableConstructorExpression } from "luaparse";
 
 import { BufferStream } from "./buffer-stream";
 import { defaultWaterOptions, SpringMap, MapInfo, SMD, SMF, WaterOptions } from "./map-model";
-const dxt = require("dxt-js");
+import { sizeOfDDS } from "./image-size";
+import { parseDxt } from "./parse-dxt";
 
 // https://github.com/spring/spring/tree/develop/rts/Map
 // https://springrts.com/wiki/Mapdev:mapinfo.lua
@@ -101,6 +102,11 @@ export class MapParser {
                 });
             }
 
+            if (mapInfo) {
+                mapInfo.minDepth = minHeight;
+                mapInfo.minDepth = maxHeight;
+            }
+
             this.cleanup(tempDir);
 
             let scriptName = "";
@@ -148,7 +154,7 @@ export class MapParser {
             const extractStream = extractFull(sd7Path, outPath, {
                 $bin: this.config.path7za,
                 recursive: true,
-                $cherryPick: ["*.smf", "*.smd", "*.smt", "mapinfo.lua", "*.png"]
+                $cherryPick: ["*.smf", "*.smd", "*.smt", "mapinfo.lua", "*.png", "*.dds"]
             });
 
             extractStream.on("end", async () => {
@@ -157,39 +163,54 @@ export class MapParser {
         });
     }
 
-    protected extractSdz(sdzPath: string, outPath: string): Promise<{ smf: Buffer, smt: Buffer, smd?: Buffer, smfName?: string, mapInfo?: Buffer, specular?: Jimp }> {
-        return new Promise(async resolve => {
-            if (this.config.verbose) {
-                console.log(`Extracting .sdz to ${outPath}`);
-            }
+    protected async extractSdz(sdzPath: string, outPath: string): Promise<{ smf: Buffer, smt: Buffer, smd?: Buffer, smfName?: string, mapInfo?: Buffer, specular?: Jimp }> {
+        if (this.config.verbose) {
+            console.log(`Extracting .sdz to ${outPath}`);
+        }
 
-            if (!existsSync(sdzPath)) {
-                throw new Error(`File not found: ${sdzPath}`);
-            }
+        if (!existsSync(sdzPath)) {
+            throw new Error(`File not found: ${sdzPath}`);
+        }
 
-            await fs.mkdir(outPath, { recursive: true });
+        await fs.mkdir(outPath, { recursive: true });
 
-            const zip = new StreamZip.async({ file: sdzPath });
-            await zip.extract("maps/", outPath);
-            await (zip as any).close();
+        const zip = new StreamZip.async({ file: sdzPath });
+        await zip.extract("maps/", outPath);
+        await (zip as any).close();
 
-            return this.extractArchiveFiles(outPath);
-        });
+        return this.extractArchiveFiles(outPath);
     }
 
     protected async extractArchiveFiles(outPath: string) {
-        const smfPath = glob.sync(`${outPath}/**/*.smf`)[0];
-        const smtPath = glob.sync(`${outPath}/**/*.smt`)[0];
-        const smdPath = glob.sync(`${outPath}/**/*.smd`)[0];
-        const mapInfoPath = glob.sync(`${outPath}/mapinfo.lua`)[0];
-        const specularPath = glob.sync(`${outPath}/**/*spec*.png`)[0];
+        const files = glob.sync(`${outPath}/**/*`);
+
+        const smfPath = files.find(filePath => filePath.match(/.*\.smf/))!;
+        const smtPath = files.find(filePath => filePath.match(/.*\.smt/))!;
+        const smdPath = files.find(filePath => filePath.match(/.*\.smd/));
+        const mapInfoPath = files.find(filePath => path.resolve(filePath) === path.join(outPath, "/", "mapinfo.lua"));
+        const specularPath = files.find(filePath => filePath.match(/.*spec.*/i));
 
         const smf = await fs.readFile(smfPath);
         const smfName = smfPath ? path.parse(smfPath).name : undefined;
         const smt = await fs.readFile(smtPath);
         const smd = smdPath ? await fs.readFile(smdPath) : undefined;
         const mapInfo = mapInfoPath ? await fs.readFile(mapInfoPath) : undefined;
-        const specular = specularPath ? await Jimp.read(specularPath) : undefined;
+
+        let specular: Jimp | undefined = undefined;
+        if (specularPath) {
+            const specularType = path.extname(specularPath);
+            if (specularType === ".dds") {
+                const specularBuffer = await fs.readFile(specularPath);
+                const specularDimensions = sizeOfDDS(specularBuffer);
+                specular = new Jimp({
+                    data: parseDxt(specularBuffer, specularDimensions.width, specularDimensions.height),
+                    width: specularDimensions.width,
+                    height: specularDimensions.height
+                });
+            } else {
+                specular = await Jimp.read(specularPath);
+            }
+        }
 
         return { smf, smt, smd, smfName, mapInfo, specular };
     }
@@ -261,8 +282,7 @@ export class MapParser {
 
         const miniMapSize = 699048;
         const miniMapBuffer = smfBuffer.slice(miniMapIndex, miniMapIndex + miniMapSize);
-        const miniMapRgbas: Uint8Array = dxt.decompress(miniMapBuffer, 1024, 1024, dxt.flags.DXT1);
-        const miniMapRgbaBuffer = Buffer.from(miniMapRgbas);
+        const miniMapRgbaBuffer = parseDxt(miniMapBuffer, 1024, 1024);
         const miniMap = new Jimp({
             data: miniMapRgbaBuffer,
             width: 1024,
@@ -319,8 +339,7 @@ export class MapParser {
         const refTiles: Buffer[][] = [];
         for (let i=0; i<numOfTiles; i++) {
             const dxt1 = bufferStream.read(680).slice(startIndex, startIndex + dxt1Size);
-            const refTileRGBA: Uint8Array = dxt.decompress(dxt1, mipmapSize, mipmapSize, dxt.flags.DXT1);
-            const refTileRGBABuffer = Buffer.from(refTileRGBA);
+            const refTileRGBABuffer = parseDxt(dxt1, mipmapSize, mipmapSize);
             const refTile: Buffer[] = [];
             for (let k=0; k<mipmapSize; k++) {
                 const pixelIndex = k * rowLength;
