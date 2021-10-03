@@ -102,11 +102,6 @@ export class MapParser {
                 });
             }
 
-            if (mapInfo) {
-                mapInfo.minDepth = minHeight;
-                mapInfo.maxDepth = maxHeight;
-            }
-
             this.cleanup(tempDir);
 
             let scriptName = "";
@@ -122,6 +117,8 @@ export class MapParser {
                 fileName: filePath.name,
                 fileNameWithExt: filePath.base,
                 scriptName,
+                minHeight,
+                maxHeight,
                 mapInfo,
                 smd,
                 smf,

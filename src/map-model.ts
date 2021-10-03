@@ -5,6 +5,8 @@ export interface SpringMap {
     fileName: string;
     fileNameWithExt: string;
     scriptName: string;
+    minHeight: number;
+    maxHeight: number;
     mapInfo?: DeepPartial<MapInfo>;
     smd?: SMD;
     smf?: SMF;
