@@ -119,7 +119,7 @@ export class MapParser {
             }
 
             return {
-                fileName,
+                fileName: filePath.base,
                 scriptName,
                 mapInfo,
                 smd,
