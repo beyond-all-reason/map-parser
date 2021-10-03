@@ -3,6 +3,7 @@ import Jimp from "jimp";
 
 export interface SpringMap {
     fileName: string;
+    fileNameWithExt: string;
     scriptName: string;
     mapInfo?: DeepPartial<MapInfo>;
     smd?: SMD;
