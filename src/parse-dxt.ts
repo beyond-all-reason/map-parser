@@ -2,6 +2,7 @@ export function parseDxt(buffer: Buffer, width: number, height: number): Buffer 
     try {
         return decompress(width, height, buffer);
     } catch (err) {
+        console.error(err);
         throw new Error("Error parsing DXT");
     }
 }

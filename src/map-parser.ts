@@ -42,6 +42,11 @@ export interface MapParserConfig {
      * @default true
      */
     water: boolean;
+    /**
+     * Parse specular map from the archive
+     * @default flase
+     */
+    parseSpecular: boolean;
 }
 
 const mapParserDefaultConfig: Partial<MapParserConfig> = {
@@ -49,7 +54,8 @@ const mapParserDefaultConfig: Partial<MapParserConfig> = {
     mipmapSize: 4,
     skipSmt: false,
     path7za: sevenBin.path7za,
-    water: true
+    water: true,
+    parseSpecular: false
 };
 
 export class MapParser {
@@ -195,7 +201,7 @@ export class MapParser {
         const mapInfo = mapInfoPath ? await fs.readFile(mapInfoPath) : undefined;
 
         let specular: Jimp | undefined = undefined;
-        if (specularPath) {
+        if (specularPath && this.config.parseSpecular) {
             const specularType = path.extname(specularPath);
             if (specularType === ".dds") {
                 const specularBuffer = await fs.readFile(specularPath);
