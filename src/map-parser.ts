@@ -119,6 +119,8 @@ export class MapParser {
                 scriptName = archive.smfName;
             }
 
+            sigintBinding.removeAllListeners();
+
             return {
                 fileName: filePath.name,
                 fileNameWithExt: filePath.base,
