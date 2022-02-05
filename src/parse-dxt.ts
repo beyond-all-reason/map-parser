@@ -39,9 +39,15 @@ function decompressBlockDXT1(data: Uint8Array, outArray?: Uint8Array) {
 }
 
 function decompress(width: number, height: number, data: Uint8Array) {
-    if (width % BlockWidth != 0) throw new Error("Width of the texture must be divisible by 4");
-    if (height % BlockHeight != 0) throw new Error("Height of the texture must be divisible by 4");
-    if (width < BlockWidth || height < BlockHeight) throw new Error("Size of the texture is to small");
+    if (width % BlockWidth !== 0) {
+        throw new Error("Width of the texture must be divisible by 4");
+    }
+    if (height % BlockHeight !== 0) {
+        throw new Error("Height of the texture must be divisible by 4");
+    }
+    if (width < BlockWidth || height < BlockHeight) {
+        throw new Error("Size of the texture is to small");
+    }
 
     let w = width / BlockWidth;
     let h = height / BlockHeight;
@@ -135,7 +141,7 @@ function getComponentsFromRGB565(color: any) {
         R: ((color & 0b11111000_00000000) >> 8) / 0xff,
         G: ((color & 0b00000111_11100000) >> 3) / 0xff,
         B: ((color & 0b00000000_00011111) << 3) / 0xff
-    }
+    };
 }
 
 function makeRGB565(r: any, g: any, b: any) {
