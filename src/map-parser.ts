@@ -3,16 +3,16 @@ import { existsSync, promises as fs } from "fs";
 import { glob } from "glob";
 import { DeepPartial } from "jaz-ts-utils";
 import Jimp from "jimp";
-import { extractFull } from "node-7z";
-import * as StreamZip from "node-stream-zip";
-import * as os from "os";
-import * as path from "path";
 import * as luaparse from "luaparse";
 import { LocalStatement, TableConstructorExpression } from "luaparse";
+import { extractFull } from "node-7z";
+import StreamZip from "node-stream-zip";
+import * as os from "os";
+import * as path from "path";
 
 import { BufferStream } from "./buffer-stream";
-import { defaultWaterOptions, SpringMap, MapInfo, SMD, SMF, WaterOptions } from "./map-model";
 import { sizeOfDDS } from "./image-size";
+import { defaultWaterOptions, MapInfo, SMD, SMF, SpringMap, WaterOptions } from "./map-model";
 import { parseDxt } from "./parse-dxt";
 
 // https://github.com/spring/spring/tree/develop/rts/Map
@@ -162,7 +162,8 @@ export class MapParser {
             });
 
             extractStream.on("end", async () => {
-                resolve(await this.extractArchiveFiles(outPath));
+                const archiveFiles = await this.extractArchiveFiles(outPath);
+                resolve(archiveFiles);
             });
         });
     }
@@ -427,7 +428,7 @@ export class MapParser {
         if (arr.length) {
             return arr;
         }
-        
+
         return obj;
     }
 
@@ -441,11 +442,12 @@ export class MapParser {
         const matches = smd.matchAll(/\s(?<key>\w+)\s*\=\s?(?<val>.*?)\;/g);
         const obj: { [key: string]: any } = {};
         const startPositions: Array<{ x: number, z: number }> = [];
-        let startPosIndex = 0;
         for (const match of matches) {
             const key = match.groups!.key;
             let val: string | number = Number(match.groups!.val);
-            if (val === NaN) val = match.groups!.val;
+            if (val === NaN) {
+                val = match.groups!.val;
+            }
 
             if (key === "StartPosX") {
                 startPositions.push({ x: Number(val), z: 0 });
@@ -532,7 +534,7 @@ export class MapParser {
             console.log(`Cleaning up temp dir: ${tmpDir}`);
         }
 
-        await fs.rmdir(tmpDir, { recursive: true });
+        await fs.rm(tmpDir, { recursive: true });
     }
 
     protected async sigint(tmpDir: string) {
