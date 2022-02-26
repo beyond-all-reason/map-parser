@@ -108,7 +108,7 @@ export class MapParser {
                 });
             }
 
-            this.cleanup(tempDir);
+            await this.cleanup(tempDir);
 
             let scriptName = "";
             if (mapInfo && mapInfo.name && mapInfo.version && mapInfo.name.includes(mapInfo.version!)) {
@@ -138,7 +138,7 @@ export class MapParser {
                 specularMap: archive.specular
             };
         } catch (err: any) {
-            this.cleanup(tempDir);
+            await this.cleanup(tempDir);
             sigintBinding.removeAllListeners();
             console.error(err);
             throw err;
@@ -536,7 +536,7 @@ export class MapParser {
             console.log(`Cleaning up temp dir: ${tmpDir}`);
         }
 
-        await fs.rm(tmpDir, { recursive: true });
+        await fs.rm(tmpDir, { recursive: true, force: true });
     }
 
     protected async sigint(tmpDir: string) {
