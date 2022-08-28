@@ -1,9 +1,11 @@
+import sevenBin from "7zip-bin";
 import { existsSync, promises as fs } from "fs";
 import { glob } from "glob";
-import { DeepPartial, extract7z } from "jaz-ts-utils";
+import { DeepPartial } from "jaz-ts-utils";
 import Jimp from "jimp";
 import * as luaparse from "luaparse";
 import { LocalStatement, TableConstructorExpression } from "luaparse";
+import { extractFull } from "node-7z";
 import StreamZip from "node-stream-zip";
 import * as os from "os";
 import * as path from "path";
@@ -19,10 +21,6 @@ import { parseDxt } from "./parse-dxt";
 // https://springrts.com/wiki/Mapdev:SMT_format
 
 export interface MapParserConfig {
-    /**
-     * Logging for debugging
-     * @default false
-     */
     verbose: boolean;
     /**
      * Resolution of tile mipmaps. Can be 4, 8, 16 or 32. Each higher mipmap level doubles the final output resolution, and also resource usage.
@@ -55,6 +53,7 @@ const mapParserDefaultConfig: Partial<MapParserConfig> = {
     verbose: false,
     mipmapSize: 4,
     skipSmt: false,
+    path7za: sevenBin.path7za,
     water: true,
     parseSpecular: false
 };
@@ -147,19 +146,28 @@ export class MapParser {
     }
 
     protected async extractSd7(sd7Path: string, outPath: string): Promise<{ smf: Buffer, smt: Buffer, smd?: Buffer, smfName?: string, mapInfo?: Buffer, specular?: Jimp }> {
-        if (this.config.verbose) {
-            console.log(`Extracting .sd7 to ${outPath}`);
-        }
+        return new Promise(async resolve => {
+            if (this.config.verbose) {
+                console.log(`Extracting .sd7 to ${outPath}`);
+            }
 
-        if (!existsSync(sd7Path)) {
-            throw new Error(`File not found: ${sd7Path}`);
-        }
+            if (!existsSync(sd7Path)) {
+                throw new Error(`File not found: ${sd7Path}`);
+            }
 
-        await fs.mkdir(outPath, { recursive: true });
+            await fs.mkdir(outPath, { recursive: true });
 
-        await extract7z(sd7Path, outPath);
+            const extractStream = extractFull(sd7Path, outPath, {
+                $bin: this.config.path7za,
+                recursive: true,
+                $cherryPick: ["*.smf", "*.smd", "*.smt", "mapinfo.lua", "*.png", "*.dds"]
+            });
 
-        return this.extractArchiveFiles(outPath);
+            extractStream.on("end", async () => {
+                const archiveFiles = await this.extractArchiveFiles(outPath);
+                resolve(archiveFiles);
+            });
+        });
     }
 
     protected async extractSdz(sdzPath: string, outPath: string): Promise<{ smf: Buffer, smt: Buffer, smd?: Buffer, smfName?: string, mapInfo?: Buffer, specular?: Jimp }> {
