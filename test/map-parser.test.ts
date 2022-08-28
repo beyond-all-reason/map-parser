@@ -59,4 +59,6 @@ it("sdz", async () => {
     const mapPath = path.join(testMapsDir, "tropical-v2.sdz");
 
     const map = await parser.parseMap(mapPath);
+
+    expect(true);
 });
