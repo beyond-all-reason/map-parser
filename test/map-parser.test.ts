@@ -35,10 +35,28 @@ it("full-export", async () => {
 it("minimap-export", async () => {
     const mapPath = path.join(testMapsDir, "red_comet.sd7");
 
-    const parser = new MapParser({ verbose: true, mipmapSize: 4, skipSmt: true });
+    const parser = new MapParser({ mipmapSize: 4, skipSmt: true });
 
     const map = await parser.parseMap(mapPath);
 
     await map.miniMap.quality(50).writeAsync("test/mini.jpg");
     expect(fs.existsSync("test/mini.jpg")).toBe(true);
 }, 20000);
+
+it("map-info", async () => {
+    const parser = new MapParser({ mipmapSize: 4, skipSmt: true });
+
+    const mapPath = path.join(testMapsDir, "barren_2.sd7");
+
+    const map = await parser.parseMap(mapPath);
+
+    expect(map.mapInfo?.extractorRadius).toBe(100);
+});
+
+it("sdz", async () => {
+    const parser = new MapParser({ mipmapSize: 4, skipSmt: true });
+
+    const mapPath = path.join(testMapsDir, "tropical-v2.sdz");
+
+    const map = await parser.parseMap(mapPath);
+});
