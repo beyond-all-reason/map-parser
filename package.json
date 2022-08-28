@@ -1,6 +1,6 @@
 {
   "name": "spring-map-parser",
-  "version": "4.4.0",
+  "version": "4.5.0",
   "description": "Parse Spring map files into typed JS objects",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
