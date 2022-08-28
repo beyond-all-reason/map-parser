@@ -38,7 +38,7 @@
   "dependencies": {
     "7zip-min": "^1.4.3",
     "glob": "^7.1.6",
-    "jaz-ts-utils": "^4.3.0",
+    "jaz-ts-utils": "^4.4.0",
     "jimp": "^0.16.1",
     "luaparse": "^0.3.1",
     "node-stream-zip": "^1.13.0"

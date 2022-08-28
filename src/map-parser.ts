@@ -1,7 +1,6 @@
-import { unpack } from "7zip-min";
 import { existsSync, promises as fs } from "fs";
 import { glob } from "glob";
-import { DeepPartial } from "jaz-ts-utils";
+import { DeepPartial, extract7z } from "jaz-ts-utils";
 import Jimp from "jimp";
 import * as luaparse from "luaparse";
 import { LocalStatement, TableConstructorExpression } from "luaparse";
@@ -158,7 +157,7 @@ export class MapParser {
 
         await fs.mkdir(outPath, { recursive: true });
 
-        await this.extract7z(sd7Path, outPath);
+        await extract7z(sd7Path, outPath);
 
         return this.extractArchiveFiles(outPath);
     }
@@ -179,18 +178,6 @@ export class MapParser {
         await (zip as any).close();
 
         return this.extractArchiveFiles(outPath);
-    }
-
-    protected async extract7z(archivePath: string, outPath: string) {
-        return new Promise<void>((resolve, reject) => {
-            unpack(archivePath, outPath, (err) => {
-                if (err) {
-                    reject(err);
-                } else {
-                    resolve();
-                }
-            });
-        });
     }
 
     protected async extractArchiveFiles(outPath: string) {
