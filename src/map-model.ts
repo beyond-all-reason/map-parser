@@ -1,7 +1,7 @@
 import { DeepPartial, Optionals } from "jaz-ts-utils";
 import Jimp from "jimp";
 
-export interface SpringMap {
+export type SpringMap = {
     fileName: string;
     fileNameWithExt: string;
     scriptName: string;
@@ -18,7 +18,7 @@ export interface SpringMap {
     specularMap?: Jimp;
 }
 
-export interface SMD {
+export type SMD = {
     description: string;
     tidalStrength: number;
     gravity: number;
@@ -32,7 +32,7 @@ export interface SMD {
     startPositions: Array<{ x: number, z: number }>;
 }
 
-export interface SMF {
+export type SMF = {
     magic: string;
     version: number;
     id: number;
@@ -66,13 +66,13 @@ export interface SMF {
     heightMapValues: number[];
 }
 
-export interface SMFExtraHeader {
+export type SMFExtraHeader = {
     size: number;
     type: number;
     data: Buffer;
 }
 
-export interface WaterOptions {
+export type WaterOptions = {
     textureMap: Jimp;
     heightMapValues: number[];
     minHeight: number;
@@ -82,7 +82,7 @@ export interface WaterOptions {
     rgbModifier?: { r: number, g: number, b: number };
 }
 
-export interface MapInfo {
+export type MapInfo = {
     fileName: string;
     scriptName: string;
     name: string;
@@ -121,24 +121,24 @@ export interface MapInfo {
     smtFileName: string;
 }
 
-export interface Smf {
+export type Smf = {
     minheight: number;
     maxheight: number;
     smtFileName0: string;
 }
 
-export interface Passfilter {
+export type Passfilter = {
     gainlf: number;
     gainhf: number;
 }
 
-export interface Sound {
+export type Sound = {
     preset: string;
     passfilter: Passfilter;
     reverb: any;
 }
 
-export interface Resources {
+export type Resources = {
     detailTex: string;
     splatDetailTex: string;
     splatDistrTex: string;
@@ -151,12 +151,12 @@ export interface Resources {
     specularTex: string;
 }
 
-export interface Splats {
+export type Splats = {
     TexScales: number[];
     TexMults: number[];
 }
 
-export interface Atmosphere {
+export type Atmosphere = {
     minWind: number;
     maxWind: number;
     fogEnd: number;
@@ -170,7 +170,7 @@ export interface Atmosphere {
     cloudDensity: number;
 }
 
-export interface Grass {
+export type Grass = {
     bladeWaveScale: number;
     bladeWidth: number;
     bladeHeight: number;
@@ -178,7 +178,7 @@ export interface Grass {
     bladeColor: number[];
 }
 
-export interface Lighting {
+export type Lighting = {
     groundShadowDensity: number;
     unitShadowDensity: number;
     groundAmbientColor: number[];
@@ -197,7 +197,7 @@ export interface Lighting {
     specularExponent: number;
 }
 
-export interface Water {
+export type Water = {
     ambientFactor: number;
     blurBase: number;
     blurExponent: number;
@@ -232,36 +232,36 @@ export interface Water {
     windSpeed: number;
 }
 
-export interface StartPos {
+export type StartPos = {
     x: number;
     z: number;
 }
 
-export interface Team {
+export type Team = {
     startPos: StartPos;
 }
 
-export interface MoveSpeeds {
+export type MoveSpeeds = {
     tank: number;
     kbot: number;
     hover: number;
     ship: number;
 }
 
-export interface TerrainType {
+export type TerrainType = {
     name: string;
     hardness: number;
     receiveTracks: boolean;
     moveSpeeds: MoveSpeeds;
 }
 
-export interface Fog {
+export type Fog = {
     color: number[];
     height: string;
     fogatten: number;
 }
 
-export interface Precipitation {
+export type Precipitation = {
     density: number;
     size: number;
     speed: number;
@@ -269,7 +269,7 @@ export interface Precipitation {
     texture: string;
 }
 
-export interface Custom {
+export type Custom = {
     fog: Fog;
     precipitation: Precipitation;
 }
