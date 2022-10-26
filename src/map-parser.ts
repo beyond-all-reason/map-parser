@@ -447,7 +447,7 @@ export class MapParser {
         for (const match of matches) {
             const key = match.groups!.key;
             let val: string | number = Number(match.groups!.val);
-            if (val === NaN) {
+            if (Number.isNaN(val)) {
                 val = match.groups!.val;
             }
 
