@@ -42,7 +42,7 @@
     "dist"
   ],
   "dependencies": {
-    "7zip-bin": "^5.2.0",
+    "7zip-bin": "5.1.1",
     "decode-dxt": "^1.0.1",
     "glob": "^7.1.6",
     "jaz-ts-utils": "^6.0.0",
