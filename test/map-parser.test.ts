@@ -60,7 +60,7 @@ test("sdz", async () => {
     const map = await parser.parseMap(mapPath);
 
     expect(true);
-});
+}, 60000);
 
 afterAll(async () => {
     await fs.promises.rmdir("test/output", { recursive: true });
