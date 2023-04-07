@@ -15,7 +15,7 @@ export type SpringMap = {
     miniMap: Jimp;
     metalMap: Jimp;
     typeMap: Jimp;
-    specularMap?: Jimp;
+    resources?: Record<string, Jimp | undefined>
 }
 
 export type SMD = {
@@ -105,7 +105,7 @@ export type MapInfo = {
     autoShowMetal: boolean;
     smf: Smf;
     sound: Sound;
-    resources: Resources;
+    resources: { [key: string]: string; };
     splats: Splats;
     atmosphere: Atmosphere;
     grass: Grass;
@@ -136,19 +136,6 @@ export type Sound = {
     preset: string;
     passfilter: Passfilter;
     reverb: any;
-}
-
-export type Resources = {
-    detailTex: string;
-    splatDetailTex: string;
-    splatDistrTex: string;
-    splatDetailNormalDiffuseAlpha: number;
-    splatDetailNormalTex1: string;
-    splatDetailNormalTex2: string;
-    splatDetailNormalTex3: string;
-    splatDetailNormalTex4: string;
-    detailNormalTex: string;
-    specularTex: string;
 }
 
 export type Splats = {

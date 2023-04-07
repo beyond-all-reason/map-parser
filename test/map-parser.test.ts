@@ -6,54 +6,53 @@ import { MapParser } from "../dist/map-parser";
 const testDir = "test";
 const testMapsDir = path.join(testDir, "test_maps");
 
-it("full-export", async () => {
-    const mapPath = path.join(testMapsDir, "red_comet.sd7");
-
-    const parser = new MapParser({ verbose: false, mipmapSize: 4, skipSmt: false });
-
-    const map = await parser.parseMap(mapPath);
-
-    await map.textureMap?.writeAsync("test/texture.png");
-    expect(fs.existsSync("test/texture.png")).toBe(true);
-
-    await map.heightMap.quality(50).writeAsync("test/height.jpg");
-    expect(fs.existsSync("test/height.jpg")).toBe(true);
-
-    await map.metalMap.quality(50).writeAsync("test/metal.jpg");
-    expect(fs.existsSync("test/metal.jpg")).toBe(true);
-
-    await map.typeMap.quality(50).writeAsync("test/type.jpg");
-    expect(fs.existsSync("test/type.jpg")).toBe(true);
-
-    await map.miniMap.quality(50).writeAsync("test/mini.jpg");
-    expect(fs.existsSync("test/mini.jpg")).toBe(true);
-
-    // await map.specularMap.writeAsync("test/specular.png");
-    // expect(fs.existsSync("test/specular.png")).toBe(true);
-}, 20000);
-
-it("minimap-export", async () => {
-    const mapPath = path.join(testMapsDir, "red_comet.sd7");
-
-    const parser = new MapParser({ mipmapSize: 4, skipSmt: true });
-
-    const map = await parser.parseMap(mapPath);
-
-    await map.miniMap.quality(50).writeAsync("test/mini.jpg");
-    expect(fs.existsSync("test/mini.jpg")).toBe(true);
-}, 20000);
-
-it("map-info", async () => {
-    const parser = new MapParser({ mipmapSize: 4, skipSmt: true });
-
-    const mapPath = path.join(testMapsDir, "barren_2.sd7");
-
-    const map = await parser.parseMap(mapPath);
-
-    expect(map.mapInfo?.extractorRadius).toBe(100);
+beforeAll(async () => {
+    await fs.promises.mkdir("test/output");
 });
 
-it("sdz", async () => {
+test("everything", async () => {
+    const mapPath = path.join(testMapsDir, "barren_2.sd7");
+
+    const parser = new MapParser({
+        verbose: false,
+        mipmapSize: 4,
+        skipSmt: false,
+        parseResources: true
+    });
+
+    const map = await parser.parseMap(mapPath);
+
+    expect(map.mapInfo?.gravity).toBe(100);
+
+    await map.textureMap?.writeAsync("test/output/texture.png");
+    expect(fs.existsSync("test/output/texture.png")).toBe(true);
+
+    await map.heightMap.quality(50).writeAsync("test/output/height.jpg");
+    expect(fs.existsSync("test/output/height.jpg")).toBe(true);
+
+    await map.metalMap.quality(50).writeAsync("test/output/metal.jpg");
+    expect(fs.existsSync("test/output/metal.jpg")).toBe(true);
+
+    await map.typeMap.quality(50).writeAsync("test/output/type.jpg");
+    expect(fs.existsSync("test/output/type.jpg")).toBe(true);
+
+    await map.miniMap.quality(50).writeAsync("test/output/mini.jpg");
+    expect(fs.existsSync("test/output/mini.jpg")).toBe(true);
+
+    await map.resources!.detailTex?.writeAsync("test/output/detailTex.png");
+    expect(fs.existsSync("test/output/detailTex.png")).toBe(true);
+
+    await map.resources!.specularTex?.writeAsync("test/output/specularTex.png");
+    expect(fs.existsSync("test/output/specularTex.png")).toBe(true);
+
+    await map.resources!.splatDetailTex?.writeAsync("test/output/splatDetailTex.png");
+    expect(fs.existsSync("test/output/splatDetailTex.png")).toBe(true);
+
+    await map.resources!.splatDetailNormalTex1?.writeAsync("test/output/splatDetailNormalTex1.png");
+    expect(fs.existsSync("test/output/splatDetailNormalTex1.png")).toBe(true);
+}, 60000);
+
+test("sdz", async () => {
     const parser = new MapParser({ mipmapSize: 4, skipSmt: true });
 
     const mapPath = path.join(testMapsDir, "tropical-v2.sdz");
@@ -61,4 +60,8 @@ it("sdz", async () => {
     const map = await parser.parseMap(mapPath);
 
     expect(true);
+});
+
+afterAll(async () => {
+    await fs.promises.rmdir("test/output", { recursive: true });
 });

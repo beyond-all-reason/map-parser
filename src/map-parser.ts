@@ -11,9 +11,11 @@ import * as os from "os";
 import * as path from "path";
 
 import { BufferStream } from "./buffer-stream";
-import { sizeOfDDS } from "./image-size";
 import { defaultWaterOptions, MapInfo, SMD, SMF, SpringMap, WaterOptions } from "./map-model";
 import { parseDxt } from "./parse-dxt";
+
+const TGA = require("tga");
+const parseDDS = require("./utex.dds");
 
 // https://github.com/spring/spring/tree/develop/rts/Map
 // https://springrts.com/wiki/Mapdev:mapinfo.lua
@@ -43,10 +45,10 @@ export interface MapParserConfig {
      */
     water: boolean;
     /**
-     * Parse specular map from the archive
-     * @default flase
+     * Parse resource image files from mapinfo->resources
+     * @default false
      */
-    parseSpecular: boolean;
+    parseResources: boolean;
 }
 
 const mapParserDefaultConfig: Partial<MapParserConfig> = {
@@ -55,7 +57,7 @@ const mapParserDefaultConfig: Partial<MapParserConfig> = {
     skipSmt: false,
     path7za: sevenBin.path7za,
     water: true,
-    parseSpecular: false
+    parseResources: false
 };
 
 export class MapParser {
@@ -69,16 +71,16 @@ export class MapParser {
         const filePath = path.parse(mapFilePath);
         const fileName = filePath.name;
         const fileExt = filePath.ext;
-        const tempDir = path.join(os.tmpdir(), fileName);
+        const tempArchiveDir = path.join(os.tmpdir(), fileName);
 
-        const sigintBinding = process.on("SIGINT", async () => this.sigint(tempDir));
+        const sigintBinding = process.on("SIGINT", async () => this.sigint(tempArchiveDir));
 
         try {
             if (fileExt !== ".sd7" && fileExt !== ".sdz") {
                 throw new Error(`${fileExt} extension is not supported, .sd7 and .sdz only.`);
             }
 
-            const archive = fileExt === ".sd7" ? await this.extractSd7(mapFilePath, tempDir) : await this.extractSdz(mapFilePath, tempDir);
+            const archive = fileExt === ".sd7" ? await this.extractSd7(mapFilePath, tempArchiveDir) : await this.extractSdz(mapFilePath, tempArchiveDir);
 
             let mapInfo: DeepPartial<MapInfo> | undefined;
             let smd: SMD | undefined;
@@ -108,8 +110,6 @@ export class MapParser {
                 });
             }
 
-            await this.cleanup(tempDir);
-
             let scriptName = "";
             if (mapInfo && mapInfo.name && mapInfo.version && mapInfo.name.includes(mapInfo.version!)) {
                 scriptName = mapInfo.name;
@@ -120,6 +120,13 @@ export class MapParser {
             }
 
             sigintBinding.removeAllListeners();
+
+            let resources: Record<string, Jimp | undefined> | undefined;
+            if (this.config.parseResources) {
+                resources = await this.parseResources(tempArchiveDir, mapInfo?.resources);
+            }
+
+            await this.cleanup(tempArchiveDir);
 
             return {
                 fileName: filePath.name,
@@ -135,10 +142,10 @@ export class MapParser {
                 miniMap: smf.miniMap,
                 typeMap: smf.typeMap,
                 textureMap: smt,
-                specularMap: archive.specular
+                resources
             };
         } catch (err: any) {
-            await this.cleanup(tempDir);
+            await this.cleanup(tempArchiveDir);
             sigintBinding.removeAllListeners();
             console.error(err);
             throw err;
@@ -159,8 +166,7 @@ export class MapParser {
 
             const extractStream = extractFull(sd7Path, outPath, {
                 $bin: this.config.path7za,
-                recursive: true,
-                $cherryPick: ["*.smf", "*.smd", "*.smt", "mapinfo.lua", "*.png", "*.dds"]
+                recursive: true
             });
 
             extractStream.on("end", async () => {
@@ -195,7 +201,6 @@ export class MapParser {
         const smtPath = files.find(filePath => filePath.match(/.*\.smt/))!;
         const smdPath = files.find(filePath => filePath.match(/.*\.smd/));
         const mapInfoPath = files.find(filePath => path.resolve(filePath) === path.join(outPath, "/", "mapinfo.lua"));
-        const specularPath = files.find(filePath => filePath.match(/.*spec.*/i));
 
         const smf = await fs.readFile(smfPath);
         const smfName = smfPath ? path.parse(smfPath).name : undefined;
@@ -203,23 +208,7 @@ export class MapParser {
         const smd = smdPath ? await fs.readFile(smdPath) : undefined;
         const mapInfo = mapInfoPath ? await fs.readFile(mapInfoPath) : undefined;
 
-        let specular: Jimp | undefined = undefined;
-        if (specularPath && this.config.parseSpecular) {
-            const specularType = path.extname(specularPath);
-            if (specularType === ".dds") {
-                const specularBuffer = await fs.readFile(specularPath);
-                const specularDimensions = sizeOfDDS(specularBuffer);
-                specular = new Jimp({
-                    data: parseDxt(specularBuffer, specularDimensions.width, specularDimensions.height),
-                    width: specularDimensions.width,
-                    height: specularDimensions.height
-                });
-            } else {
-                specular = await Jimp.read(specularPath);
-            }
-        }
-
-        return { smf, smt, smd, smfName, mapInfo, specular };
+        return { smf, smt, smd, smfName, mapInfo };
     }
 
     protected async parseSMF(smfBuffer: Buffer): Promise<SMF> {
@@ -529,6 +518,52 @@ export class MapParser {
                 }
             }
         }
+    }
+
+    protected async parseResources(mapArchiveDir: string, resourceFiles?: Record<string, unknown>) : Promise<Record<string, Jimp | undefined>> {
+        if (!resourceFiles) {
+            return {};
+        }
+
+        const resources: Record<string, Jimp | undefined> = {};
+
+        for (const key in resourceFiles) {
+            const value = resourceFiles[key];
+
+            if (typeof value !== "string") {
+                continue;
+            }
+
+            const filename = path.join(mapArchiveDir, "maps", value);
+
+            try {
+                if ([".png", ".jpg", ".bmp"].includes(path.extname(filename))) {
+                    resources[key] = await Jimp.read(filename);
+                } else if (path.extname(filename) === ".dds") {
+                    const resourceBuffer = await fs.readFile(filename);
+                    const decodedDXT1 = parseDDS(resourceBuffer);
+                    resources[key] = new Jimp({
+                        data: Buffer.from(decodedDXT1.image),
+                        width: decodedDXT1.width,
+                        height: decodedDXT1.height
+                    });
+                } else if (path.extname(filename) === ".tga") {
+                    const buffer = await fs.readFile(filename);
+                    const tga = new TGA(buffer);
+                    resources[key] = new Jimp({
+                        data: tga.pixels,
+                        width: tga.width,
+                        height: tga.height
+                    });
+                } else {
+                    console.warn(`No resource image parser for ${key}: ${filename}`);
+                }
+            } catch (err: any) {
+                console.error(`Error parsing resource: ${key}: ${filename} `, err);
+            }
+        }
+
+        return resources;
     }
 
     protected async cleanup(tmpDir: string) {
