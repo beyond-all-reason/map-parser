@@ -571,7 +571,11 @@ export class MapParser {
             console.log(`Cleaning up temp dir: ${tmpDir}`);
         }
 
-        await fs.rm(tmpDir, { recursive: true, force: true });
+        try {
+            await fs.rm(tmpDir, { recursive: true, force: true });
+        } catch (err) {
+            console.error(err);
+        }
     }
 
     protected async sigint(tmpDir: string) {
