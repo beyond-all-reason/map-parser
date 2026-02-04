@@ -7,11 +7,11 @@ const testDir = "test";
 const testMapsDir = path.join(testDir, "test_maps");
 
 beforeAll(async () => {
-    await fs.promises.mkdir("test/output");
+    await fs.promises.mkdir("test/output", { recursive: true });
 });
 
 test("everything", async () => {
-    const mapPath = path.join(testMapsDir, "barren_2.sd7");
+    const mapPath = path.join(testMapsDir, "coast_to_coast_bar_v1.0.sd7");
 
     const parser = new MapParser({
         verbose: false,
@@ -22,7 +22,7 @@ test("everything", async () => {
 
     const map = await parser.parseMap(mapPath);
 
-    expect(map.mapInfo?.gravity).toBe(100);
+    expect(map.mapInfo?.gravity).toBe(120);
 
     await map.textureMap?.writeAsync("test/output/texture.png");
     expect(fs.existsSync("test/output/texture.png")).toBe(true);
@@ -62,6 +62,6 @@ test("sdz", async () => {
     expect(true);
 }, 60000);
 
-afterAll(async () => {
-    await fs.promises.rmdir("test/output", { recursive: true });
-});
+// afterAll(async () => {
+//     await fs.promises.rmdir("test/output", { recursive: true });
+// });
