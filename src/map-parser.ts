@@ -98,6 +98,7 @@ export class MapParser {
             const smf = await this.parseSMF(archive.smf);
 
             let smt: Jimp | undefined;
+            let smtDry: Jimp | undefined;
             if (!this.config.skipSmt) {
                 smt = await this.parseSMT(archive.smt, smf.tileIndexMap, smf.mapWidthUnits, smf.mapHeightUnits, this.config.mipmapSize);
             }
@@ -106,6 +107,8 @@ export class MapParser {
             const maxHeight = mapInfo?.smf?.maxheight ?? smd?.maxHeight ?? smf?.maxDepth;
 
             if (this.config.water && smt) {
+                smtDry = smt.cloneQuiet();
+
                 this.applyWater({
                     textureMap: smt,
                     heightMapValues: smf.heightMapValues,
@@ -146,6 +149,7 @@ export class MapParser {
                 miniMap: smf.miniMap,
                 typeMap: smf.typeMap,
                 textureMap: smt,
+                textureMapDry: smtDry,
                 resources
             };
         } catch (err) {
