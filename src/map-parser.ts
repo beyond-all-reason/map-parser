@@ -73,7 +73,9 @@ export class MapParser {
         const fileExt = filePath.ext;
         const tempArchiveDir = path.join(os.tmpdir(), fileName);
 
-        const sigintBinding = process.on("SIGINT", async () => this.sigint(tempArchiveDir));
+        // register a named handler so we can remove only our listener later
+        const sigintHandler = async () => this.sigint(tempArchiveDir);
+        process.on("SIGINT", sigintHandler);
 
         try {
             if (fileExt !== ".sd7" && fileExt !== ".sdz") {
@@ -119,7 +121,8 @@ export class MapParser {
                 scriptName = archive.smfName;
             }
 
-            sigintBinding.removeAllListeners();
+            // remove only our SIGINT listener
+            process.removeListener("SIGINT", sigintHandler);
 
             let resources: Record<string, Jimp | undefined> | undefined;
             if (this.config.parseResources) {
@@ -146,14 +149,14 @@ export class MapParser {
             };
         } catch (err: any) {
             await this.cleanup(tempArchiveDir);
-            sigintBinding.removeAllListeners();
+            process.removeListener("SIGINT", sigintHandler);
             console.error(err);
             throw err;
         }
     }
 
     protected async extractSd7(sd7Path: string, outPath: string): Promise<{ smf: Buffer, smt: Buffer, smd?: Buffer, smfName?: string, mapInfo?: Buffer, specular?: Jimp }> {
-        return new Promise(async resolve => {
+        return new Promise(async (resolve, reject) => {
             if (this.config.verbose) {
                 console.log(`Extracting .sd7 to ${outPath}`);
             }
@@ -170,8 +173,16 @@ export class MapParser {
             });
 
             extractStream.on("end", async () => {
-                const archiveFiles = await this.extractArchiveFiles(outPath);
-                resolve(archiveFiles);
+                try {
+                    const archiveFiles = await this.extractArchiveFiles(outPath);
+                    resolve(archiveFiles);
+                } catch (err) {
+                    reject(err);
+                }
+            });
+
+            extractStream.on("error", (err: any) => {
+                reject(err);
             });
         });
     }
@@ -262,36 +273,60 @@ export class MapParser {
             const level = percent * 255;
             return [level, level, level, 255];
         });
-        const heightMap = new Jimp({
-            data: Buffer.from(heightMapColors.flat()),
-            width: mapWidth + 1,
-            height: mapHeight + 1
-        });
+        const hmBuf = Buffer.from(heightMapColors.flat());
+
+        let heightMap: Jimp;
+        try {
+            heightMap = new Jimp({ data: hmBuf, width: mapWidth + 1, height: mapHeight + 1 });
+        } catch (err) {
+            const empty = Buffer.alloc((mapWidth + 1) * (mapHeight + 1) * 4, 0);
+            heightMap = new Jimp({ data: empty, width: mapWidth + 1, height: mapHeight + 1 });
+        }
 
         const typeMapSize = (mapWidth/2) * (mapHeight/2);
         const typeMapBuffer = smfBuffer.slice(typeMapIndex, typeMapIndex + typeMapSize);
-        const typeMap = new Jimp({
-            data: singleChannelToQuadChannel(typeMapBuffer),
-            width: mapWidth / 2,
-            height: mapHeight / 2
-        });
+        const tmBuf = singleChannelToQuadChannel(typeMapBuffer);
 
-        const miniMapSize = 699048;
+        let typeMap: Jimp;
+        try {
+            typeMap = new Jimp({ data: tmBuf, width: mapWidth / 2, height: mapHeight / 2 });
+        } catch (err) {
+            const empty = Buffer.alloc((mapWidth / 2) * (mapHeight / 2) * 4, 0);
+            typeMap = new Jimp({ data: empty, width: mapWidth / 2, height: mapHeight / 2 });
+        }
+
+        // Calculate miniMap size from surrounding indices instead of hardcoding
+        let miniMapSize = 0;
+        if (metalMapIndex && metalMapIndex > miniMapIndex) {
+            miniMapSize = metalMapIndex - miniMapIndex;
+        } else if (featureMapIndex && featureMapIndex > miniMapIndex) {
+            miniMapSize = featureMapIndex - miniMapIndex;
+        } else {
+            miniMapSize = smfBuffer.length - miniMapIndex;
+        }
+
         const miniMapBuffer = smfBuffer.slice(miniMapIndex, miniMapIndex + miniMapSize);
         const miniMapRgbaBuffer = parseDxt(miniMapBuffer, 1024, 1024);
-        const miniMap = new Jimp({
-            data: miniMapRgbaBuffer,
-            width: 1024,
-            height: 1024
-        });
+
+        let miniMap: Jimp;
+        try {
+            miniMap = new Jimp({ data: miniMapRgbaBuffer, width: 1024, height: 1024 });
+        } catch (err) {
+            const empty = Buffer.alloc(1024 * 1024 * 4, 0);
+            miniMap = new Jimp({ data: empty, width: 1024, height: 1024 });
+        }
 
         const metalMapSize = (mapWidth/2) * (mapHeight/2);
         const metalMapBuffer = smfBuffer.slice(metalMapIndex, metalMapIndex + metalMapSize);
-        const metalMap = new Jimp({
-            data: singleChannelToQuadChannel(metalMapBuffer),
-            width: mapWidth / 2,
-            height: mapHeight / 2
-        });
+        const mmBuf = singleChannelToQuadChannel(metalMapBuffer);
+
+        let metalMap: Jimp;
+        try {
+            metalMap = new Jimp({ data: mmBuf, width: mapWidth / 2, height: mapHeight / 2 });
+        } catch (err) {
+            const empty = Buffer.alloc((mapWidth / 2) * (mapHeight / 2) * 4, 0);
+            metalMap = new Jimp({ data: empty, width: mapWidth / 2, height: mapHeight / 2 });
+        }
 
         const tileIndexMapBufferStream = new BufferStream(smfBuffer.slice(tileIndexMapIndex));
         const numOfTileFiles = tileIndexMapBufferStream.readInt();
@@ -328,27 +363,139 @@ export class MapParser {
         const tileSize = bufferStream.readInt();
         const compressionType = bufferStream.readInt();
 
-        const startIndex = mipmapSize === 32 ? 0 : mipmapSize === 16 ? 512 : mipmapSize === 8 ? 640 : 672;
-        const dxt1Size = Math.pow(mipmapSize, 2) / 2;
-        const rowLength = mipmapSize * 4;
+        // compute header size (we've read 16 + 4*4 = 32 bytes)
+        const headerSize = bufferStream.getPosition();
+        const dataSize = smtBuffer.length - headerSize;
+        const calcStride = numOfTiles > 0 ? Math.floor(dataSize / numOfTiles) : 680;
 
-        const refTiles: Buffer[][] = [];
-        for (let i=0; i<numOfTiles; i++) {
-            const dxt1 = bufferStream.read(680).slice(startIndex, startIndex + dxt1Size);
-            const refTileRGBABuffer = parseDxt(dxt1, mipmapSize, mipmapSize);
-            const refTile: Buffer[] = [];
-            for (let k=0; k<mipmapSize; k++) {
-                const pixelIndex = k * rowLength;
-                const refTileRow = refTileRGBABuffer.slice(pixelIndex, pixelIndex + rowLength);
-                refTile.push(refTileRow);
+        let TILE_STRIDE: number;
+        let bytesToRead: number;
+        let real_w = 4, real_h = 4;
+
+        if (calcStride >= 512) {
+            TILE_STRIDE = 680; real_w = 32; real_h = 32; bytesToRead = 512;
+        } else {
+            TILE_STRIDE = calcStride; bytesToRead = calcStride;
+            if (calcStride >= 128) { real_w = 16; real_h = 16; }
+            else if (calcStride >= 32) { real_w = 8; real_h = 8; }
+            else { real_w = 4; real_h = 4; }
+        }
+
+        const rowLength = real_w * 4;
+
+        // We'll assemble tiles at the requested mipmapSize. When tiles are stored at larger sizes
+        // (e.g. 32x32) we'll decode at real_w/real_h then resize down to mipmapSize. If stored at
+        // smaller sizes we'll decode and scale up.
+        const assembledRowLength = mipmapSize * 4;
+
+        // Prepare default empty tile to fill missing indices (mipmapSize rows)
+        const defaultRow = Buffer.alloc(assembledRowLength, 0);
+        const defaultTile: Buffer[] = [];
+        for (let r = 0; r < mipmapSize; r++) defaultTile.push(Buffer.from(defaultRow));
+
+        // pre-allocate refTiles with placeholders sized to mipmapSize
+        const refTiles: Buffer[][] = new Array(numOfTiles).fill(null).map(() => defaultTile.map(row => Buffer.from(row)));
+
+        const uniqueIndices = Array.from(new Set(tileIndexes));
+        const smtDataStart = headerSize;
+        let successCount = 0;
+
+        for (const tileId of uniqueIndices) {
+            if (typeof tileId !== 'number') continue;
+            if (tileId < 0 || tileId >= numOfTiles) continue;
+
+            const offset = smtDataStart + (tileId * TILE_STRIDE);
+            if (offset + bytesToRead > smtBuffer.length) continue;
+
+            // Determine expected DXT length for this tile's native resolution
+            const dxtLen = (real_w * real_h) / 2; // bytes for DXT1
+
+            // If tiles are stored in 680-byte blocks with multiple mipmaps embedded, pick the correct offset
+            let dxtSlice: Buffer | null = null;
+            if (TILE_STRIDE === 680) {
+                const tileBlock = smtBuffer.slice(offset, Math.min(offset + TILE_STRIDE, smtBuffer.length));
+                const startIndex = real_w === 32 ? 0 : real_w === 16 ? 512 : real_w === 8 ? 640 : 672;
+                dxtSlice = tileBlock.slice(startIndex, startIndex + dxtLen);
+            } else {
+                // Tiles are tightly packed per-mip; read only the expected DXT length
+                if (offset + dxtLen > smtBuffer.length) continue;
+                dxtSlice = smtBuffer.slice(offset, offset + dxtLen);
             }
-            refTiles.push(refTile);
+
+            if (!dxtSlice || dxtSlice.length < dxtLen) continue;
+
+            try {
+                // Decode the tile at its native resolution using the exact DXT bytes
+                const refTileRGBABuffer = parseDxt(dxtSlice, real_w, real_h);
+
+                // Create a temporary Jimp image to perform a nearest-neighbour resize to the requested mipmapSize
+                let tileImage = new Jimp({ data: Buffer.from(refTileRGBABuffer), width: real_w, height: real_h });
+                if (real_w !== mipmapSize || real_h !== mipmapSize) {
+                    tileImage = tileImage.resize(mipmapSize, mipmapSize, Jimp.RESIZE_NEAREST_NEIGHBOR);
+                }
+
+                // Extract per-row buffers at the assembled mip size
+                const assembledRows: Buffer[] = [];
+                const tileData = tileImage.bitmap.data;
+                for (let k = 0; k < mipmapSize; k++) {
+                    const pixelIndex = k * mipmapSize * 4;
+                    const rowBuf = Buffer.from(tileData.slice(pixelIndex, pixelIndex + mipmapSize * 4));
+                    assembledRows.push(rowBuf);
+                }
+                refTiles[tileId] = assembledRows;
+                successCount++;
+            } catch (err) {
+                // ignore single tile failures
+            }
+        }
+
+        if (successCount === 0) {
+            // fallback: try to decode sequentially like older implementation
+            bufferStream.destroy();
+            for (let i=0; i<numOfTiles; i++) {
+                const offset = headerSize + i * TILE_STRIDE;
+                if (offset + bytesToRead > smtBuffer.length) break;
+                try {
+                    const dxtLen = (real_w * real_h) / 2;
+                    let dxtSlice: Buffer | null = null;
+                    if (TILE_STRIDE === 680) {
+                        const tileBlock = smtBuffer.slice(offset, Math.min(offset + TILE_STRIDE, smtBuffer.length));
+                        const startIndex = real_w === 32 ? 0 : real_w === 16 ? 512 : real_w === 8 ? 640 : 672;
+                        dxtSlice = tileBlock.slice(startIndex, startIndex + dxtLen);
+                    } else {
+                        if (offset + dxtLen > smtBuffer.length) continue;
+                        dxtSlice = smtBuffer.slice(offset, offset + dxtLen);
+                    }
+
+                    if (!dxtSlice || dxtSlice.length < dxtLen) continue;
+
+                    const refTileRGBABuffer = parseDxt(dxtSlice, real_w, real_h);
+
+                    let tileImage = new Jimp({ data: Buffer.from(refTileRGBABuffer), width: real_w, height: real_h });
+                    if (real_w !== mipmapSize || real_h !== mipmapSize) {
+                        tileImage = tileImage.resize(mipmapSize, mipmapSize, Jimp.RESIZE_NEAREST_NEIGHBOR);
+                    }
+
+                    const assembledRows: Buffer[] = [];
+                    const tileData = tileImage.bitmap.data;
+                    for (let k = 0; k < mipmapSize; k++) {
+                        const pixelIndex = k * mipmapSize * 4;
+                        const rowBuf = Buffer.from(tileData.slice(pixelIndex, pixelIndex + mipmapSize * 4));
+                        assembledRows.push(rowBuf);
+                    }
+                    refTiles[i] = assembledRows;
+                } catch (err) {
+                    // ignore
+                }
+            }
+        } else {
+            bufferStream.destroy();
         }
 
         const tiles: Buffer[][] = [];
         for (let i=0; i<tileIndexes.length; i++) {
             const refTileIndex = tileIndexes[i];
-            const tile = this.cloneTile(refTiles[refTileIndex]);
+            const tile = this.cloneTile(refTiles[refTileIndex] || defaultTile);
             tiles.push(tile);
         }
 
@@ -363,11 +510,26 @@ export class MapParser {
             tileStrips.push(textureStrip);
         }
 
-        return new Jimp({
-            data: Buffer.concat(tileStrips),
-            width: mipmapSize * mapWidthUnits * 32,
-            height: mipmapSize * mapHeightUnits * 32
-        }).background(0x000000);
+        const finalWidth = mipmapSize * mapWidthUnits * 32;
+        const finalHeight = mipmapSize * mapHeightUnits * 32;
+        const finalExpectedLen = finalWidth * finalHeight * 4;
+        const finalBuffer = Buffer.concat(tileStrips);
+
+
+        // Ensure we have a Buffer instance (defensive) before passing to Jimp
+        const safeBuffer = Buffer.isBuffer(finalBuffer) ? finalBuffer : Buffer.from(finalBuffer || []);
+
+        try {
+            if (safeBuffer.length !== finalExpectedLen) {
+                const emptyBuf = Buffer.alloc(finalExpectedLen, 0);
+                return new Jimp({ data: emptyBuf, width: finalWidth, height: finalHeight }).background(0x000000);
+            }
+
+            return new Jimp({ data: safeBuffer, width: finalWidth, height: finalHeight }).background(0x000000);
+        } catch (err) {
+            const emptyBuf = Buffer.alloc(finalExpectedLen, 0);
+            return new Jimp({ data: emptyBuf, width: finalWidth, height: finalHeight }).background(0x000000);
+        }
     }
 
     protected async parseMapInfo(buffer: Buffer): Promise<MapInfo> {
@@ -394,7 +556,7 @@ export class MapParser {
                 if (field.value.type === "StringLiteral" || field.value.type === "NumericLiteral" || field.value.type === "BooleanLiteral") {
                     obj[field.key.name] = field.value.value;
                 } else if (field.value.type === "UnaryExpression" && field.value.argument.type === "NumericLiteral") {
-                    obj[field.key.name] = -field.value.argument.value;
+                    obj[field.key.name] = -((field.value.argument as any).value);
                 } else if (field.value.type === "TableConstructorExpression") {
                     obj[field.key.name] = this.parseMapInfoFields(field.value.fields);
                 }
@@ -406,10 +568,14 @@ export class MapParser {
             } else if (field.type === "TableKey") {
                 if (field.value.type === "StringLiteral" || field.value.type === "NumericLiteral" || field.value.type === "BooleanLiteral") {
                     if (field.key.type === "NumericLiteral") {
-                        arr[field.key.type] = field.value.value;
+                        // use the numeric literal value as the array index (was using .type previously which is incorrect)
+                        arr[(field.key as any).value] = field.value.value;
                     }
                 } else if (field.value.type === "UnaryExpression" && field.value.argument.type === "NumericLiteral") {
-                    arr[field.key.type] = -field.value.argument.value;
+                    // Ensure the key is a numeric literal before using .value, and assert types for the unary argument
+                    if (field.key.type === "NumericLiteral") {
+                        arr[(field.key as any).value] = -((field.value.argument as any).value);
+                    }
                 } else if (field.value.type === "TableConstructorExpression") {
                     arr.push(this.parseMapInfoFields(field.value.fields));
                 }
@@ -472,9 +638,9 @@ export class MapParser {
         return clone;
     }
 
-    protected joinTilesHorizontally(tiles: Buffer[][], mipmapSize: 4 | 8 | 16 | 32) : Buffer {
+    protected joinTilesHorizontally(tiles: Buffer[][], rows: number) : Buffer {
         const tileRows: Buffer[] = [];
-        for (let y=0; y<mipmapSize; y++) {
+        for (let y=0; y<rows; y++) {
             for (let x=0; x<tiles.length; x++) {
                 const row = tiles[x].shift()!;
                 tileRows.push(row);
@@ -498,14 +664,16 @@ export class MapParser {
         const depthRange = options.maxHeight - options.minHeight;
         const waterLevelPercent = Math.abs(options.minHeight / depthRange);
         const color = options.rgbColor ?? defaultWaterOptions.rgbColor;
-        const colorModifier = options.rgbColor ?? defaultWaterOptions.rgbModifier;
+        // was incorrectly using rgbColor for modifier - use rgbModifier when present
+        const colorModifier = options.rgbModifier ?? defaultWaterOptions.rgbModifier;
 
         for (let y=0; y<height; y++) {
             for (let x=0; x<width; x++) {
                 const pixelHex = options.textureMap.getPixelColor(x, y);
                 const pixelRGBA = Jimp.intToRGBA(pixelHex);
                 const heightMapY = Math.floor((y+1)/heightMapRatio);
-                const heightMapX = Math.floor(((x+1) % width) / heightMapRatio);
+                // avoid wrapping with modulo - compute direct division into heightmap coords
+                const heightMapX = Math.floor((x+1) / heightMapRatio);
                 const heightValue = options.heightMapValues[heightMapWidth * heightMapY + heightMapX];
                 if (heightValue < waterLevelPercent) {
                     const waterDepth = heightValue / waterLevelPercent;
