@@ -547,7 +547,7 @@ export class MapParser {
         for (const key in resourceFiles) {
             const value = resourceFiles[key];
 
-            if (typeof value !== "string") {
+            if (key === "splatDetailTex" || typeof value !== "string") {
                 continue;
             }
 
