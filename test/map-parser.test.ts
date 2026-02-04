@@ -39,14 +39,8 @@ test("everything", async () => {
     await map.miniMap.quality(50).writeAsync("test/output/mini.jpg");
     expect(fs.existsSync("test/output/mini.jpg")).toBe(true);
 
-    await map.resources!.detailTex?.writeAsync("test/output/detailTex.png");
-    expect(fs.existsSync("test/output/detailTex.png")).toBe(true);
-
     await map.resources!.specularTex?.writeAsync("test/output/specularTex.png");
     expect(fs.existsSync("test/output/specularTex.png")).toBe(true);
-
-    await map.resources!.splatDetailTex?.writeAsync("test/output/splatDetailTex.png");
-    expect(fs.existsSync("test/output/splatDetailTex.png")).toBe(true);
 
     await map.resources!.splatDetailNormalTex1?.writeAsync("test/output/splatDetailNormalTex1.png");
     expect(fs.existsSync("test/output/splatDetailNormalTex1.png")).toBe(true);
