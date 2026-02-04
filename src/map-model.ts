@@ -15,7 +15,8 @@ export type SpringMap = {
     miniMap: Jimp;
     metalMap: Jimp;
     typeMap: Jimp;
-    resources?: Record<string, Jimp | undefined>
+    skybox?: Jimp;
+    resources?: Record<string, Jimp | undefined>;
 }
 
 export type SMD = {
