@@ -368,9 +368,13 @@ export class MapParser {
             TILE_STRIDE = 680; real_w = 32; real_h = 32; bytesToRead = 512;
         } else {
             TILE_STRIDE = calcStride; bytesToRead = calcStride;
-            if (calcStride >= 128) { real_w = 16; real_h = 16; }
-            else if (calcStride >= 32) { real_w = 8; real_h = 8; }
-            else { real_w = 4; real_h = 4; }
+            if (calcStride >= 128) {
+                real_w = 16; real_h = 16;
+            } else if (calcStride >= 32) {
+                real_w = 8; real_h = 8;
+            } else {
+                real_w = 4; real_h = 4;
+            }
         }
 
         const rowLength = real_w * 4;
@@ -383,7 +387,9 @@ export class MapParser {
         // Prepare default empty tile to fill missing indices (mipmapSize rows)
         const defaultRow = Buffer.alloc(assembledRowLength, 0);
         const defaultTile: Buffer[] = [];
-        for (let r = 0; r < mipmapSize; r++) defaultTile.push(Buffer.from(defaultRow));
+        for (let r = 0; r < mipmapSize; r++) {
+            defaultTile.push(Buffer.from(defaultRow));
+        }
 
         // pre-allocate refTiles with placeholders sized to mipmapSize
         const refTiles: Buffer[][] = new Array(numOfTiles).fill(null).map(() => defaultTile.map(row => Buffer.from(row)));
@@ -393,11 +399,17 @@ export class MapParser {
         let successCount = 0;
 
         for (const tileId of uniqueIndices) {
-            if (typeof tileId !== 'number') continue;
-            if (tileId < 0 || tileId >= numOfTiles) continue;
+            if (typeof tileId !== "number") {
+                continue;
+            }
+            if (tileId < 0 || tileId >= numOfTiles) {
+                continue;
+            }
 
             const offset = smtDataStart + (tileId * TILE_STRIDE);
-            if (offset + bytesToRead > smtBuffer.length) continue;
+            if (offset + bytesToRead > smtBuffer.length) {
+                continue;
+            }
 
             // Determine expected DXT length for this tile's native resolution
             const dxtLen = (real_w * real_h) / 2; // bytes for DXT1
@@ -410,11 +422,15 @@ export class MapParser {
                 dxtSlice = tileBlock.slice(startIndex, startIndex + dxtLen);
             } else {
                 // Tiles are tightly packed per-mip; read only the expected DXT length
-                if (offset + dxtLen > smtBuffer.length) continue;
+                if (offset + dxtLen > smtBuffer.length) {
+                    continue;
+                }
                 dxtSlice = smtBuffer.slice(offset, offset + dxtLen);
             }
 
-            if (!dxtSlice || dxtSlice.length < dxtLen) continue;
+            if (!dxtSlice || dxtSlice.length < dxtLen) {
+                continue;
+            }
 
             try {
                 // Decode the tile at its native resolution using the exact DXT bytes
@@ -446,7 +462,9 @@ export class MapParser {
             bufferStream.destroy();
             for (let i=0; i<numOfTiles; i++) {
                 const offset = headerSize + i * TILE_STRIDE;
-                if (offset + bytesToRead > smtBuffer.length) break;
+                if (offset + bytesToRead > smtBuffer.length) {
+                    break;
+                }
                 try {
                     const dxtLen = (real_w * real_h) / 2;
                     let dxtSlice: Buffer | null = null;
@@ -455,11 +473,15 @@ export class MapParser {
                         const startIndex = real_w === 32 ? 0 : real_w === 16 ? 512 : real_w === 8 ? 640 : 672;
                         dxtSlice = tileBlock.slice(startIndex, startIndex + dxtLen);
                     } else {
-                        if (offset + dxtLen > smtBuffer.length) continue;
+                        if (offset + dxtLen > smtBuffer.length) {
+                            continue;
+                        }
                         dxtSlice = smtBuffer.slice(offset, offset + dxtLen);
                     }
 
-                    if (!dxtSlice || dxtSlice.length < dxtLen) continue;
+                    if (!dxtSlice || dxtSlice.length < dxtLen) {
+                        continue;
+                    }
 
                     const refTileRGBABuffer = parseDxt(dxtSlice, real_w, real_h);
 
@@ -550,7 +572,7 @@ export class MapParser {
                 if (field.value.type === "StringLiteral" || field.value.type === "NumericLiteral" || field.value.type === "BooleanLiteral") {
                     obj[field.key.name] = field.value.value;
                 } else if (field.value.type === "UnaryExpression" && field.value.argument.type === "NumericLiteral") {
-                    obj[field.key.name] = -((field.value.argument as any).value);
+                    obj[field.key.name] = -field.value.argument.value;
                 } else if (field.value.type === "TableConstructorExpression") {
                     obj[field.key.name] = this.parseMapInfoFields(field.value.fields);
                 }
@@ -563,12 +585,12 @@ export class MapParser {
                 if (field.value.type === "StringLiteral" || field.value.type === "NumericLiteral" || field.value.type === "BooleanLiteral") {
                     if (field.key.type === "NumericLiteral") {
                         // use the numeric literal value as the array index (was using .type previously which is incorrect)
-                        arr[(field.key as any).value] = field.value.value;
+                        arr[field.key.value] = field.value.value;
                     }
                 } else if (field.value.type === "UnaryExpression" && field.value.argument.type === "NumericLiteral") {
                     // Ensure the key is a numeric literal before using .value, and assert types for the unary argument
                     if (field.key.type === "NumericLiteral") {
-                        arr[(field.key as any).value] = -((field.value.argument as any).value);
+                        arr[field.key.value] = -field.value.argument.value;
                     }
                 } else if (field.value.type === "TableConstructorExpression") {
                     arr.push(this.parseMapInfoFields(field.value.fields));
