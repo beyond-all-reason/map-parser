@@ -69,10 +69,11 @@ function decompress(width: number, height: number, data: Uint8Array) {
             for (let x = 0; x < 4; x++) {
                 const px = x + pixelX;
                 const py = y + pixelY;
-                out[px * 4 + py * 4 * width] = decompressed[j];
-                out[px * 4 + py * 4 * width + 1] = decompressed[j + 1];
-                out[px * 4 + py * 4 * width + 2] = decompressed[j + 2];
-                out[px * 4 + py * 4 * width + 3] = decompressed[j + 3];
+                const outIndex = (py * width + px) * 4;
+                out[outIndex] = decompressed[j];
+                out[outIndex + 1] = decompressed[j + 1];
+                out[outIndex + 2] = decompressed[j + 2];
+                out[outIndex + 3] = decompressed[j + 3];
                 j += 4;
             }
         }
@@ -89,47 +90,47 @@ function generateDXT1Lookup(colorValue0: number, colorValue1: number, out = null
 
     if (colorValue0 > colorValue1) {
         // Non transparent mode
-        lookup[0] = Math.floor((color0.R) * 255);
-        lookup[1] = Math.floor((color0.G) * 255);
-        lookup[2] = Math.floor((color0.B) * 255);
-        lookup[3] = Math.floor(255);
+        lookup[0] = color0.R;
+        lookup[1] = color0.G;
+        lookup[2] = color0.B;
+        lookup[3] = 255;
 
-        lookup[4] = Math.floor((color1.R) * 255);
-        lookup[5] = Math.floor((color1.G) * 255);
-        lookup[6] = Math.floor((color1.B) * 255);
-        lookup[7] = Math.floor(255);
+        lookup[4] = color1.R;
+        lookup[5] = color1.G;
+        lookup[6] = color1.B;
+        lookup[7] = 255;
 
-        lookup[8] = Math.floor((color0.R * 2 / 3 + color1.R * 1 / 3) * 255);
-        lookup[9] = Math.floor((color0.G * 2 / 3 + color1.G * 1 / 3) * 255);
-        lookup[10] = Math.floor((color0.B * 2 / 3 + color1.B * 1 / 3) * 255);
-        lookup[11] = Math.floor(255);
+        lookup[8] = Math.floor((color0.R * 2 + color1.R * 1) / 3);
+        lookup[9] = Math.floor((color0.G * 2 + color1.G * 1) / 3);
+        lookup[10] = Math.floor((color0.B * 2 + color1.B * 1) / 3);
+        lookup[11] = 255;
 
-        lookup[12] = Math.floor((color0.R * 1 / 3 + color1.R * 2 / 3) * 255);
-        lookup[13] = Math.floor((color0.G * 1 / 3 + color1.G * 2 / 3) * 255);
-        lookup[14] = Math.floor((color0.B * 1 / 3 + color1.B * 2 / 3) * 255);
-        lookup[15] = Math.floor(255);
+        lookup[12] = Math.floor((color0.R * 1 + color1.R * 2) / 3);
+        lookup[13] = Math.floor((color0.G * 1 + color1.G * 2) / 3);
+        lookup[14] = Math.floor((color0.B * 1 + color1.B * 2) / 3);
+        lookup[15] = 255;
 
     } else {
         // transparent mode
-        lookup[0] = Math.floor((color0.R) * 255);
-        lookup[1] = Math.floor((color0.G) * 255);
-        lookup[2] = Math.floor((color0.B) * 255);
-        lookup[3] = Math.floor(255);
+        lookup[0] = color0.R;
+        lookup[1] = color0.G;
+        lookup[2] = color0.B;
+        lookup[3] = 255;
 
-        lookup[4] = Math.floor((color0.R * 1 / 2 + color1.R * 1 / 2) * 255);
-        lookup[5] = Math.floor((color0.G * 1 / 2 + color1.G * 1 / 2) * 255);
-        lookup[6] = Math.floor((color0.B * 1 / 2 + color1.B * 1 / 2) * 255);
-        lookup[7] = Math.floor(255);
+        lookup[4] = color1.R;
+        lookup[5] = color1.G;
+        lookup[6] = color1.B;
+        lookup[7] = 255;
 
-        lookup[8] = Math.floor((color1.R) * 255);
-        lookup[9] = Math.floor((color1.G) * 255);
-        lookup[10] = Math.floor((color1.B) * 255);
-        lookup[11] = Math.floor(255);
+        lookup[8] = Math.floor((color0.R + color1.R) / 2);
+        lookup[9] = Math.floor((color0.G + color1.G) / 2);
+        lookup[10] = Math.floor((color0.B + color1.B) / 2);
+        lookup[11] = 255;
 
-        lookup[12] = Math.floor(0);
-        lookup[13] = Math.floor(0);
-        lookup[14] = Math.floor(0);
-        lookup[15] = Math.floor(0);
+        lookup[12] = 0;
+        lookup[13] = 0;
+        lookup[14] = 0;
+        lookup[15] = 0;
     }
 
     return lookup;
@@ -137,11 +138,13 @@ function generateDXT1Lookup(colorValue0: number, colorValue1: number, out = null
 
 
 function getComponentsFromRGB565(color: number) {
-    return {
-        R: ((color & 0b11111000_00000000) >> 8) / 0xff,
-        G: ((color & 0b00000111_11100000) >> 3) / 0xff,
-        B: ((color & 0b00000000_00011111) << 3) / 0xff
-    };
+    // Simple bit shift approach matching Python implementation
+    // This produces smoother gradients with fewer artifacts than bit replication
+    const r = (color & 0xF800) >> 8;  // 5 bits shifted to positions 3-7
+    const g = (color & 0x07E0) >> 3;  // 6 bits shifted to positions 2-7
+    const b = (color & 0x001F) << 3;  // 5 bits shifted to positions 3-7
+
+    return { R: r, G: g, B: b };
 }
 
 function makeRGB565(r: number, g: number, b: number) {
