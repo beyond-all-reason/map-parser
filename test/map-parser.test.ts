@@ -56,6 +56,6 @@ test("sdz", async () => {
     expect(true);
 }, 60000);
 
-// afterAll(async () => {
-//     await fs.promises.rmdir("test/output", { recursive: true });
-// });
+afterAll(async () => {
+    await fs.promises.rmdir("test/output", { recursive: true });
+});
