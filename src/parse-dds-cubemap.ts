@@ -1,7 +1,6 @@
 import Jimp from "jimp";
 
 import { CubemapFaces } from "./cubemap-to-equirectangular";
-
 import parseDDS from "./utex.dds";
 
 interface DDSHeader {
