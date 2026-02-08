@@ -1,4 +1,4 @@
-import { DeepPartial, Optionals } from "jaz-ts-utils";
+import type { DeepPartial, Optionals } from "jaz-ts-utils";
 import Jimp from "jimp";
 
 export type SpringMap = {
@@ -62,6 +62,7 @@ export type SMF = {
     miniMap: Jimp;
     metalMap: Jimp;
     tileIndexMap: number[];
+    /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
     features: any; // TODO
     heightMapValues: number[];
 }
@@ -92,7 +93,9 @@ export type MapInfo = {
     version: string;
     mapfile: string;
     modtype: number;
+    /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
     depend: any;
+    /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
     replace: any;
     maphardness: number;
     notDeformable: boolean;
@@ -135,6 +138,7 @@ export type Passfilter = {
 export type Sound = {
     preset: string;
     passfilter: Passfilter;
+    /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
     reverb: any;
 }
 

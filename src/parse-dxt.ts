@@ -25,9 +25,9 @@ function decompressBlockDXT1(data: Uint8Array, outArray?: Uint8Array) {
 
     const out = outArray || new Uint8Array(RGBABlockSize);
     for (let i = 0; i < 16; i++) {
-        let bitOffset = i * 2;
-        let byte = 4 + Math.floor(bitOffset / 8);
-        let bits = (data[byte] >> bitOffset % 8) & 3;
+        const bitOffset = i * 2;
+        const byte = 4 + Math.floor(bitOffset / 8);
+        const bits = (data[byte] >> bitOffset % 8) & 3;
 
         out[i * 4 + 0] = lookup[bits * 4 + 0];
         out[i * 4 + 1] = lookup[bits * 4 + 1];
@@ -49,26 +49,26 @@ function decompress(width: number, height: number, data: Uint8Array) {
         throw new Error("Size of the texture is to small");
     }
 
-    let w = width / BlockWidth;
-    let h = height / BlockHeight;
-    let blockNumber = w * h;
+    const w = width / BlockWidth;
+    const h = height / BlockHeight;
+    const blockNumber = w * h;
 
     //if (blockNumber * DXT1BlockSize != data.length) throw new Error("Data does not match dimensions");
 
-    let out = new Uint8Array(width * height * 4);
-    let blockBuffer = new Uint8Array(RGBABlockSize);
+    const out = new Uint8Array(width * height * 4);
+    const blockBuffer = new Uint8Array(RGBABlockSize);
 
     for (let i = 0; i < blockNumber; i++) {
-        let decompressed = decompressBlockDXT1(data.slice(i * DXT1BlockSize, (i + 1) * DXT1BlockSize), blockBuffer);
+        const decompressed = decompressBlockDXT1(data.slice(i * DXT1BlockSize, (i + 1) * DXT1BlockSize), blockBuffer);
 
-        let pixelX = (i % w) * 4;
-        let pixelY = Math.floor(i / w) * 4;
+        const pixelX = (i % w) * 4;
+        const pixelY = Math.floor(i / w) * 4;
 
         let j = 0;
         for (let y = 0; y < 4; y++) {
             for (let x = 0; x < 4; x++) {
-                let px = x + pixelX;
-                let py = y + pixelY;
+                const px = x + pixelX;
+                const py = y + pixelY;
                 out[px * 4 + py * 4 * width] = decompressed[j];
                 out[px * 4 + py * 4 * width + 1] = decompressed[j + 1];
                 out[px * 4 + py * 4 * width + 2] = decompressed[j + 2];
@@ -82,10 +82,10 @@ function decompress(width: number, height: number, data: Uint8Array) {
 }
 
 function generateDXT1Lookup(colorValue0: number, colorValue1: number, out = null) {
-    let color0 = getComponentsFromRGB565(colorValue0);
-    let color1 = getComponentsFromRGB565(colorValue1);
+    const color0 = getComponentsFromRGB565(colorValue0);
+    const color1 = getComponentsFromRGB565(colorValue1);
 
-    let lookup = out || new Uint8Array(16);
+    const lookup = out || new Uint8Array(16);
 
     if (colorValue0 > colorValue1) {
         // Non transparent mode
@@ -136,7 +136,7 @@ function generateDXT1Lookup(colorValue0: number, colorValue1: number, out = null
 }
 
 
-function getComponentsFromRGB565(color: any) {
+function getComponentsFromRGB565(color: number) {
     return {
         R: ((color & 0b11111000_00000000) >> 8) / 0xff,
         G: ((color & 0b00000111_11100000) >> 3) / 0xff,
@@ -144,6 +144,6 @@ function getComponentsFromRGB565(color: any) {
     };
 }
 
-function makeRGB565(r: any, g: any, b: any) {
+function makeRGB565(r: number, g: number, b: number) {
     return ((r & 0b11111000) << 8) | ((g & 0b11111100) << 3) | ((b & 0b11111000) >> 3);
 }

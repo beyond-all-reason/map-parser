@@ -1,4 +1,5 @@
 // https://github.com/photopea/UTEX.js
+/* eslint-disable */
 
 const UTEX = {};
 

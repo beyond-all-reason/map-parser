@@ -1,5 +1,6 @@
 # Spring Map Parser
-Parser for SpringRTS map files
+
+Parser for SpringRTS/RecoilEngine map files
 
 ## Usage
 
@@ -27,3 +28,12 @@ import { MapParser } from "spring-map-parser";
 ```
 
 The different map images are [Jimp](https://www.npmjs.com/package/jimp) instances, which provides some useful image processing functionality.
+
+## Development
+
+### Publish new version
+
+```
+npm version --sign-git-tag patch|minor|major
+git push --follow-tags
+```

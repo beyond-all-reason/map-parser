@@ -1,7 +1,9 @@
+import { once } from "node:events";
+
 import sevenBin from "7zip-bin";
 import { existsSync, promises as fs } from "fs";
 import { glob } from "glob";
-import { DeepPartial } from "jaz-ts-utils";
+import type { DeepPartial } from "jaz-ts-utils";
 import Jimp from "jimp";
 import * as luaparse from "luaparse";
 import { LocalStatement, TableConstructorExpression } from "luaparse";
@@ -14,8 +16,10 @@ import { BufferStream } from "./buffer-stream";
 import { defaultWaterOptions, MapInfo, SMD, SMF, SpringMap, WaterOptions } from "./map-model";
 import { parseDxt } from "./parse-dxt";
 
+/* eslint-disable @typescript-eslint/no-require-imports */
 const TGA = require("tga");
 const parseDDS = require("./utex.dds");
+/* eslint-enable @typescript-eslint/no-require-imports */
 
 // https://github.com/spring/spring/tree/develop/rts/Map
 // https://springrts.com/wiki/Mapdev:mapinfo.lua
@@ -144,7 +148,7 @@ export class MapParser {
                 textureMap: smt,
                 resources
             };
-        } catch (err: any) {
+        } catch (err) {
             await this.cleanup(tempArchiveDir);
             sigintBinding.removeAllListeners();
             console.error(err);
@@ -153,27 +157,23 @@ export class MapParser {
     }
 
     protected async extractSd7(sd7Path: string, outPath: string): Promise<{ smf: Buffer, smt: Buffer, smd?: Buffer, smfName?: string, mapInfo?: Buffer, specular?: Jimp }> {
-        return new Promise(async resolve => {
-            if (this.config.verbose) {
-                console.log(`Extracting .sd7 to ${outPath}`);
-            }
+        if (this.config.verbose) {
+            console.log(`Extracting .sd7 to ${outPath}`);
+        }
 
-            if (!existsSync(sd7Path)) {
-                throw new Error(`File not found: ${sd7Path}`);
-            }
+        if (!existsSync(sd7Path)) {
+            throw new Error(`File not found: ${sd7Path}`);
+        }
 
-            await fs.mkdir(outPath, { recursive: true });
+        await fs.mkdir(outPath, { recursive: true });
 
-            const extractStream = extractFull(sd7Path, outPath, {
-                $bin: this.config.path7za,
-                recursive: true
-            });
-
-            extractStream.on("end", async () => {
-                const archiveFiles = await this.extractArchiveFiles(outPath);
-                resolve(archiveFiles);
-            });
+        const extractStream = extractFull(sd7Path, outPath, {
+            $bin: this.config.path7za,
+            recursive: true
         });
+
+        await once(extractStream, "end");
+        return await this.extractArchiveFiles(outPath);
     }
 
     protected async extractSdz(sdzPath: string, outPath: string): Promise<{ smf: Buffer, smt: Buffer, smd?: Buffer, smfName?: string, mapInfo?: Buffer, specular?: Jimp }> {
@@ -189,7 +189,7 @@ export class MapParser {
 
         const zip = new StreamZip.async({ file: sdzPath });
         await zip.extract("maps/", outPath);
-        await (zip as any).close();
+        await zip.close();
 
         return this.extractArchiveFiles(outPath);
     }
@@ -386,7 +386,9 @@ export class MapParser {
     }
 
     protected parseMapInfoFields(fields: (luaparse.TableKey | luaparse.TableKeyString | luaparse.TableValue)[]) {
+        /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
         const arr: any = [];
+        /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
         const obj: any = {};
 
         for (const field of fields) {
@@ -430,7 +432,8 @@ export class MapParser {
 
         const smd = buffer.toString();
 
-        const matches = smd.matchAll(/\s(?<key>\w+)\s*\=\s?(?<val>.*?)\;/g);
+        const matches = smd.matchAll(/\s(?<key>\w+)\s*=\s?(?<val>.*?);/g);
+        /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
         const obj: { [key: string]: any } = {};
         const startPositions: Array<{ x: number, z: number }> = [];
         for (const match of matches) {
@@ -558,7 +561,7 @@ export class MapParser {
                 } else {
                     console.warn(`No resource image parser for ${key}: ${filename}`);
                 }
-            } catch (err: any) {
+            } catch (err) {
                 console.error(`Error parsing resource: ${key}: ${filename} `, err);
             }
         }
