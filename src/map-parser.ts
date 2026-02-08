@@ -13,10 +13,10 @@ import * as os from "os";
 import * as path from "path";
 
 import { BufferStream } from "./buffer-stream";
-import { defaultWaterOptions, MapInfo, SMD, SMF, SpringMap, WaterOptions } from "./map-model";
-import { parseDxt } from "./parse-dxt";
-import { parseDDSCubemap } from "./parse-dds-cubemap";
 import { cubemapToEquirectangular } from "./cubemap-to-equirectangular";
+import { defaultWaterOptions, MapInfo, SMD, SMF, SpringMap, WaterOptions } from "./map-model";
+import { parseDDSCubemap } from "./parse-dds-cubemap";
+import { parseDxt } from "./parse-dxt";
 
 /* eslint-disable @typescript-eslint/no-require-imports */
 const TGA = require("tga");
@@ -614,7 +614,7 @@ export class MapParser {
             }
 
             return equirectangular;
-        } catch (err: any) {
+        } catch (err) {
             console.error(`Error parsing skybox: ${filename}`, err);
             return undefined;
         }

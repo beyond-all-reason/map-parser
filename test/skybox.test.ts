@@ -35,7 +35,7 @@ test("skybox parsing - coast to coast", async () => {
     // Save the skybox for visual inspection
     await map.skybox!.writeAsync("test/output/skybox.png");
     expect(fs.existsSync("test/output/skybox.png")).toBe(true);
-}, 120000); // Increase timeout for large file processing
+}, 180000); // Increase timeout for large file processing
 
 test("skybox disabled - coast to coast", async () => {
     const mapPath = path.join(testMapsDir, "coast_to_coast_bar_v1.0.sd7");

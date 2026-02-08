@@ -2,7 +2,7 @@ import Jimp from "jimp";
 
 import { CubemapFaces } from "./cubemap-to-equirectangular";
 
-const parseDDS = require("./utex.dds");
+import parseDDS from "./utex.dds";
 
 interface DDSHeader {
     flags: number;
