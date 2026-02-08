@@ -53,6 +53,11 @@ export interface MapParserConfig {
      * @default false
      */
     parseResources: boolean;
+    /**
+     * List of specific resources to parse when parseResources: true
+     * @default undefined
+     */
+    resources?: string[];
 }
 
 const mapParserDefaultConfig: Partial<MapParserConfig> = {
@@ -716,6 +721,9 @@ export class MapParser {
             const value = resourceFiles[key];
 
             if (typeof value !== "string") {
+                continue;
+            }
+            if (this.config.resources && !this.config.resources.includes(key)) {
                 continue;
             }
 

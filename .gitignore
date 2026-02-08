@@ -1,7 +1,12 @@
+# IDE-specific dirs
 .idea/
+
 dist
 node_modules
 /working-files
+/test/test_maps/*
+!/test/test_maps/barren_2.sd7
+!/test/test_maps/tropical-v2.sdz
 /tiles
 /out.png
 /height.jpg
