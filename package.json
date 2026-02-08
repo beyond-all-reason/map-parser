@@ -10,7 +10,8 @@
     "dev": "tsc --watch",
     "lint": "eslint . --ext .ts",
     "lint:fix": "eslint . --ext .ts --fix",
-    "test": "jest"
+    "test": "jest",
+    "prepare": "husky"
   },
   "author": "Jazcash and others",
   "license": "mit",
@@ -53,16 +54,17 @@
     "@types/jest": "^30",
     "@types/jimp": "^0.2.28",
     "@types/luaparse": "^0.2.7",
-    "@types/node-7z": "^2.1.0",
     "@types/node": "^16",
+    "@types/node-7z": "^2.1.0",
+    "eslint": "^9.32.0",
     "eslint-plugin-simple-import-sort": "^12.1.1",
     "eslint-plugin-unused-imports": "^4.3.0",
-    "eslint": "^9.32.0",
+    "husky": "^9.1.7",
     "jaz-ts-utils": "^7.10.0",
     "jest": "^30.0.5",
     "ts-jest": "^29.4.1",
     "ts-node": "^10.9.2",
-    "typescript-eslint": "^8.54.0",
-    "typescript": "^5.9.2"
+    "typescript": "^5.9.2",
+    "typescript-eslint": "^8.54.0"
   }
 }
