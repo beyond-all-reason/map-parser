@@ -11,7 +11,7 @@ beforeAll(async () => {
 });
 
 test("everything", async () => {
-    const mapPath = path.join(testMapsDir, "coast_to_coast_bar_v1.0.sd7");
+    const mapPath = path.join(testMapsDir, "hooked_1.1.1.sd7");
 
     const parser = new MapParser({
         verbose: false,
@@ -22,7 +22,7 @@ test("everything", async () => {
 
     const map = await parser.parseMap(mapPath);
 
-    expect(map.mapInfo?.gravity).toBe(120);
+    expect(map.mapInfo?.gravity).toBe(100);
 
     await map.textureMap?.writeAsync("test/output/texture.png");
     expect(fs.existsSync("test/output/texture.png")).toBe(true);
