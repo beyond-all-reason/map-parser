@@ -415,7 +415,7 @@ export class MapParser {
             } else if (field.type === "TableKey") {
                 if (field.value.type === "StringLiteral" || field.value.type === "NumericLiteral" || field.value.type === "BooleanLiteral") {
                     if (field.key.type === "NumericLiteral") {
-                        // use the numeric literal value as the array index (was using .type previously which is incorrect)
+                        // use the numeric literal value as the array index
                         arr[field.key.value] = field.value.value;
                     }
                 } else if (field.value.type === "UnaryExpression" && field.value.argument.type === "NumericLiteral") {
