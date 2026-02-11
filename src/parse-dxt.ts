@@ -100,14 +100,14 @@ function generateDXT1Lookup(colorValue0: number, colorValue1: number, out = null
         lookup[6] = color1.B;
         lookup[7] = 255;
 
-        lookup[8] = Math.floor((color0.R * 2 + color1.R * 1) / 3);
-        lookup[9] = Math.floor((color0.G * 2 + color1.G * 1) / 3);
-        lookup[10] = Math.floor((color0.B * 2 + color1.B * 1) / 3);
+        lookup[8] = Math.floor((color0.R * 2 + color1.R) / 3);
+        lookup[9] = Math.floor((color0.G * 2 + color1.G) / 3);
+        lookup[10] = Math.floor((color0.B * 2 + color1.B) / 3);
         lookup[11] = 255;
 
-        lookup[12] = Math.floor((color0.R * 1 + color1.R * 2) / 3);
-        lookup[13] = Math.floor((color0.G * 1 + color1.G * 2) / 3);
-        lookup[14] = Math.floor((color0.B * 1 + color1.B * 2) / 3);
+        lookup[12] = Math.floor((color0.R + color1.R * 2) / 3);
+        lookup[13] = Math.floor((color0.G + color1.G * 2) / 3);
+        lookup[14] = Math.floor((color0.B + color1.B * 2) / 3);
         lookup[15] = 255;
 
     } else {
@@ -138,13 +138,11 @@ function generateDXT1Lookup(colorValue0: number, colorValue1: number, out = null
 
 
 function getComponentsFromRGB565(color: number) {
-    // Simple bit shift approach matching Python implementation
-    // This produces smoother gradients with fewer artifacts than bit replication
-    const r = (color & 0xF800) >> 8;  // 5 bits shifted to positions 3-7
-    const g = (color & 0x07E0) >> 3;  // 6 bits shifted to positions 2-7
-    const b = (color & 0x001F) << 3;  // 5 bits shifted to positions 3-7
-
-    return { R: r, G: g, B: b };
+    return {
+        R: (color & 0b11111000_00000000) >> 8,
+        G: (color & 0b00000111_11100000) >> 3,
+        B: (color & 0b00000000_00011111) << 3
+    };
 }
 
 function makeRGB565(r: number, g: number, b: number) {

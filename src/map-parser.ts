@@ -82,7 +82,9 @@ export class MapParser {
         const fileExt = filePath.ext;
         const tempArchiveDir = path.join(os.tmpdir(), fileName);
 
-        const sigintBinding = process.on("SIGINT", async () => this.sigint(tempArchiveDir));
+        // register a named handler so we can remove only our listener later
+        const sigintHandler = async () => this.sigint(tempArchiveDir);
+        process.on("SIGINT", sigintHandler);
 
         try {
             if (fileExt !== ".sd7" && fileExt !== ".sdz") {
@@ -128,7 +130,7 @@ export class MapParser {
                 scriptName = archive.smfName;
             }
 
-            sigintBinding.removeAllListeners();
+            process.removeListener("SIGINT", sigintHandler);
 
             let resources: Record<string, Jimp | undefined> | undefined;
             if (this.config.parseResources) {
@@ -155,7 +157,7 @@ export class MapParser {
             };
         } catch (err) {
             await this.cleanup(tempArchiveDir);
-            sigintBinding.removeAllListeners();
+            process.removeListener("SIGINT", sigintHandler);
             console.error(err);
             throw err;
         }
