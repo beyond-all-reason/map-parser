@@ -100,14 +100,14 @@ export class MapParser {
             let smt: Jimp | undefined;
             let smtDry: Jimp | undefined;
             if (!this.config.skipSmt) {
-                smt = await this.parseSMT(archive.smt, smf.tileIndexMap, smf.mapWidthUnits, smf.mapHeightUnits, this.config.mipmapSize);
+                smtDry = await this.parseSMT(archive.smt, smf.tileIndexMap, smf.mapWidthUnits, smf.mapHeightUnits, this.config.mipmapSize);
             }
 
             const minHeight = mapInfo?.smf?.minheight ?? smd?.minHeight ?? smf?.minDepth;
             const maxHeight = mapInfo?.smf?.maxheight ?? smd?.maxHeight ?? smf?.maxDepth;
 
-            if (this.config.water && smt) {
-                smtDry = smt.cloneQuiet();
+            if (this.config.water && smtDry) {
+                smt = smtDry.cloneQuiet();
 
                 this.applyWater({
                     textureMap: smt,
@@ -148,7 +148,7 @@ export class MapParser {
                 metalMap: smf.metalMap,
                 miniMap: smf.miniMap,
                 typeMap: smf.typeMap,
-                textureMap: smt,
+                textureMap: smt ?? smtDry,
                 textureMapDry: smtDry,
                 resources
             };
