@@ -11,6 +11,7 @@ export type SpringMap = {
     smd?: SMD;
     smf?: SMF;
     textureMap?: Jimp;
+    textureMapDry?: Jimp;
     heightMap: Jimp;
     miniMap: Jimp;
     metalMap: Jimp;
