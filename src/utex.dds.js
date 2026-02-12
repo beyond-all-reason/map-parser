@@ -609,6 +609,29 @@ UTEX.DDS = {
                 } else {
                     throw ("unknown bit count "+bc);
                 }
+            } else if (pf.flags&C.DDPF_RGB) {
+                // RGB without alpha channel (24-bit)
+                if (bc===24) {
+                    for (var i=0; i<img.length; i+=4) {
+                        var idx = offset + (i>>2)*3;
+                        img[i+0] = data[idx+2];  // R
+                        img[i+1] = data[idx+1];  // G
+                        img[i+2] = data[idx+0];  // B
+                        img[i+3] = 255;          // A (fully opaque)
+                    }
+                    offset += (w * h * 3);
+                } else if (bc===32) {
+                    // 32-bit RGB (with unused alpha or padding)
+                    for (var i=0; i<img.length; i+=4) {
+                        img[i+0] = data[offset+i+2];  // R
+                        img[i+1] = data[offset+i+1];  // G
+                        img[i+2] = data[offset+i+0];  // B
+                        img[i+3] = 255;               // A (fully opaque)
+                    }
+                    offset += img.length;
+                } else {
+                    throw ("unknown bit count for RGB format: "+bc);
+                }
             } else if ((pf.flags&C.DDPF_ALPHA) || (pf.flags&C.DDPF_ALPHAPIXELS) || (pf.flags&C.DDPF_LUMINANCE)) {
                 if (bc===8)  {
                     for (var i=0; i<img.length; i+=4) {

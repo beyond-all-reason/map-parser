@@ -7,11 +7,11 @@ const testDir = "test";
 const testMapsDir = path.join(testDir, "test_maps");
 
 beforeAll(async () => {
-    await fs.promises.mkdir("test/output");
+    await fs.promises.mkdir("test/output", { recursive: true });
 });
 
 test("everything", async () => {
-    const mapPath = path.join(testMapsDir, "barren_2.sd7");
+    const mapPath = path.join(testMapsDir, "hooked_1.1.1.sd7");
 
     const parser = new MapParser({
         verbose: false,
@@ -42,14 +42,8 @@ test("everything", async () => {
     await map.miniMap.quality(50).writeAsync("test/output/mini.jpg");
     expect(fs.existsSync("test/output/mini.jpg")).toBe(true);
 
-    await map.resources!.detailTex?.writeAsync("test/output/detailTex.png");
-    expect(fs.existsSync("test/output/detailTex.png")).toBe(true);
-
     await map.resources!.specularTex?.writeAsync("test/output/specularTex.png");
     expect(fs.existsSync("test/output/specularTex.png")).toBe(true);
-
-    await map.resources!.splatDetailTex?.writeAsync("test/output/splatDetailTex.png");
-    expect(fs.existsSync("test/output/splatDetailTex.png")).toBe(true);
 
     await map.resources!.splatDetailNormalTex1?.writeAsync("test/output/splatDetailNormalTex1.png");
     expect(fs.existsSync("test/output/splatDetailNormalTex1.png")).toBe(true);

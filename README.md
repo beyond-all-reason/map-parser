@@ -24,6 +24,12 @@ import { MapParser } from "spring-map-parser";
     await map.typeMap!.writeAsync("working-files/type.png");
     await map.miniMap!.writeAsync("working-files/mini.png");
     await map.textureMap!.scaleToFit(765, 300).quality(80).writeAsync("working-files/test.jpg");
+
+    // If the map has a skybox defined in mapinfo.lua (atmosphere.skyBox)
+    // it will be automatically converted from a DDS cubemap to an equirectangular (2:1) image
+    if (map.skybox) {
+        await map.skybox.writeAsync("working-files/skybox.png");
+    }
 })();
 ```
 

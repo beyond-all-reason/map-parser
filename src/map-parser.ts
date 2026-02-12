@@ -13,7 +13,9 @@ import * as os from "os";
 import * as path from "path";
 
 import { BufferStream } from "./buffer-stream";
+import { cubemapToEquirectangular } from "./cubemap-to-equirectangular";
 import { defaultWaterOptions, MapInfo, SMD, SMF, SpringMap, WaterOptions } from "./map-model";
+import { parseDDSCubemap } from "./parse-dds-cubemap";
 import { parseDxt } from "./parse-dxt";
 
 /* eslint-disable @typescript-eslint/no-require-imports */
@@ -49,6 +51,11 @@ export interface MapParserConfig {
      */
     water: boolean;
     /**
+     * Parse skybox image file from mapinfo->atmosphere->skybox
+     * @default false
+     */
+    parseSkybox: boolean;
+    /**
      * Parse resource image files from mapinfo->resources
      * @default false
      */
@@ -66,6 +73,7 @@ const mapParserDefaultConfig: Partial<MapParserConfig> = {
     skipSmt: false,
     path7za: sevenBin.path7za,
     water: true,
+    parseSkybox: false,
     parseResources: false
 };
 
@@ -140,6 +148,11 @@ export class MapParser {
                 resources = await this.parseResources(tempArchiveDir, mapInfo?.resources);
             }
 
+            let skybox: Jimp | undefined;
+            if (this.config.parseSkybox && mapInfo?.atmosphere?.skyBox) {
+                skybox = await this.parseSkybox(tempArchiveDir, mapInfo.atmosphere.skyBox);
+            }
+
             await this.cleanup(tempArchiveDir);
 
             return {
@@ -157,7 +170,8 @@ export class MapParser {
                 typeMap: smf.typeMap,
                 textureMap: smt ?? smtDry,
                 textureMapDry: smtDry,
-                resources
+                resources,
+                skybox
             };
         } catch (err) {
             await this.cleanup(tempArchiveDir);
@@ -547,7 +561,7 @@ export class MapParser {
         for (const key in resourceFiles) {
             const value = resourceFiles[key];
 
-            if (typeof value !== "string") {
+            if (["splatDetailTex", "detailTex"].includes(key) || typeof value !== "string") {
                 continue;
             }
             if (this.config.resources && !this.config.resources.includes(key)) {
@@ -584,6 +598,43 @@ export class MapParser {
         }
 
         return resources;
+    }
+
+    protected async parseSkybox(mapArchiveDir: string, skyboxPath: string, targetWidth: number = 4096): Promise<Jimp | undefined> {
+        if (this.config.verbose) {
+            console.log(`Parsing skybox: ${skyboxPath}`);
+        }
+
+        const filename = path.join(mapArchiveDir, "maps", skyboxPath);
+
+        try {
+            if (!existsSync(filename)) {
+                console.warn(`Skybox file not found: ${filename}`);
+                return undefined;
+            }
+
+            if (path.extname(filename) !== ".dds") {
+                console.warn(`Skybox must be a .dds file, got: ${filename}`);
+                return undefined;
+            }
+
+            const skyboxBuffer = await fs.readFile(filename);
+
+            // Parse the DDS cubemap into 6 faces
+            const faces = await parseDDSCubemap(skyboxBuffer);
+
+            // Convert cubemap to equirectangular projection (2:1 aspect ratio)
+            const equirectangular = cubemapToEquirectangular(faces, targetWidth);
+
+            if (this.config.verbose) {
+                console.log(`Converted skybox to equirectangular ${equirectangular.getWidth()}x${equirectangular.getHeight()}`);
+            }
+
+            return equirectangular;
+        } catch (err) {
+            console.error(`Error parsing skybox: ${filename}`, err);
+            return undefined;
+        }
     }
 
     protected async cleanup(tmpDir: string) {
