@@ -27,6 +27,9 @@ test("everything", async () => {
     await map.textureMap?.writeAsync("test/output/texture.png");
     expect(fs.existsSync("test/output/texture.png")).toBe(true);
 
+    await map.textureMapDry?.writeAsync("test/output/texture-dry.png");
+    expect(fs.existsSync("test/output/texture-dry.png")).toBe(true);
+
     await map.heightMap.quality(50).writeAsync("test/output/height.jpg");
     expect(fs.existsSync("test/output/height.jpg")).toBe(true);
 

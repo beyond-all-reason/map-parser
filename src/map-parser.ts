@@ -60,6 +60,11 @@ export interface MapParserConfig {
      * @default false
      */
     parseResources: boolean;
+    /**
+     * List of specific resources to parse when parseResources: true
+     * @default undefined
+     */
+    resources?: string[];
 }
 
 const mapParserDefaultConfig: Partial<MapParserConfig> = {
@@ -85,7 +90,9 @@ export class MapParser {
         const fileExt = filePath.ext;
         const tempArchiveDir = path.join(os.tmpdir(), fileName);
 
-        const sigintBinding = process.on("SIGINT", async () => this.sigint(tempArchiveDir));
+        // register a named handler so we can remove only our listener later
+        const sigintHandler = async () => this.sigint(tempArchiveDir);
+        process.on("SIGINT", sigintHandler);
 
         try {
             if (fileExt !== ".sd7" && fileExt !== ".sdz") {
@@ -106,14 +113,17 @@ export class MapParser {
             const smf = await this.parseSMF(archive.smf);
 
             let smt: Jimp | undefined;
+            let smtDry: Jimp | undefined;
             if (!this.config.skipSmt) {
-                smt = await this.parseSMT(archive.smt, smf.tileIndexMap, smf.mapWidthUnits, smf.mapHeightUnits, this.config.mipmapSize);
+                smtDry = await this.parseSMT(archive.smt, smf.tileIndexMap, smf.mapWidthUnits, smf.mapHeightUnits, this.config.mipmapSize);
             }
 
             const minHeight = mapInfo?.smf?.minheight ?? smd?.minHeight ?? smf?.minDepth;
             const maxHeight = mapInfo?.smf?.maxheight ?? smd?.maxHeight ?? smf?.maxDepth;
 
-            if (this.config.water && smt) {
+            if (this.config.water && smtDry) {
+                smt = smtDry.cloneQuiet();
+
                 this.applyWater({
                     textureMap: smt,
                     heightMapValues: smf.heightMapValues,
@@ -131,7 +141,7 @@ export class MapParser {
                 scriptName = archive.smfName;
             }
 
-            sigintBinding.removeAllListeners();
+            process.removeListener("SIGINT", sigintHandler);
 
             let resources: Record<string, Jimp | undefined> | undefined;
             if (this.config.parseResources) {
@@ -158,13 +168,14 @@ export class MapParser {
                 metalMap: smf.metalMap,
                 miniMap: smf.miniMap,
                 typeMap: smf.typeMap,
-                textureMap: smt,
+                textureMap: smt ?? smtDry,
+                textureMapDry: smtDry,
                 resources,
                 skybox
             };
         } catch (err) {
             await this.cleanup(tempArchiveDir);
-            sigintBinding.removeAllListeners();
+            process.removeListener("SIGINT", sigintHandler);
             console.error(err);
             throw err;
         }
@@ -422,10 +433,13 @@ export class MapParser {
             } else if (field.type === "TableKey") {
                 if (field.value.type === "StringLiteral" || field.value.type === "NumericLiteral" || field.value.type === "BooleanLiteral") {
                     if (field.key.type === "NumericLiteral") {
-                        arr[field.key.type] = field.value.value;
+                        // use the numeric literal value as the array index
+                        arr[field.key.value] = field.value.value;
                     }
                 } else if (field.value.type === "UnaryExpression" && field.value.argument.type === "NumericLiteral") {
-                    arr[field.key.type] = -field.value.argument.value;
+                    if (field.key.type === "NumericLiteral") {
+                        arr[field.key.value] = -field.value.argument.value;
+                    }
                 } else if (field.value.type === "TableConstructorExpression") {
                     arr.push(this.parseMapInfoFields(field.value.fields));
                 }
@@ -515,14 +529,14 @@ export class MapParser {
         const depthRange = options.maxHeight - options.minHeight;
         const waterLevelPercent = Math.abs(options.minHeight / depthRange);
         const color = options.rgbColor ?? defaultWaterOptions.rgbColor;
-        const colorModifier = options.rgbColor ?? defaultWaterOptions.rgbModifier;
+        const colorModifier = options.rgbModifier ?? defaultWaterOptions.rgbModifier;
 
         for (let y=0; y<height; y++) {
             for (let x=0; x<width; x++) {
                 const pixelHex = options.textureMap.getPixelColor(x, y);
                 const pixelRGBA = Jimp.intToRGBA(pixelHex);
                 const heightMapY = Math.floor((y+1)/heightMapRatio);
-                const heightMapX = Math.floor(((x+1) % width) / heightMapRatio);
+                const heightMapX = Math.floor((x+1) / heightMapRatio);
                 const heightValue = options.heightMapValues[heightMapWidth * heightMapY + heightMapX];
                 if (heightValue < waterLevelPercent) {
                     const waterDepth = heightValue / waterLevelPercent;
@@ -548,6 +562,9 @@ export class MapParser {
             const value = resourceFiles[key];
 
             if (["splatDetailTex", "detailTex"].includes(key) || typeof value !== "string") {
+                continue;
+            }
+            if (this.config.resources && !this.config.resources.includes(key)) {
                 continue;
             }
 
