@@ -53,5 +53,7 @@ jobs:
           node - << END
           const m = require('spring-map-parser');
           const p = new m.MapParser({ verbose: true, mipmapSize: 4, skipSmt: false });
-          p.parseMap("source/test/test_maps/barren_2.sd7").then(() => console.log("ok"));
+          p.parseMap("source/test/test_maps/barren_2.sd7")
+            .then(() => console.log("ok"))
+            .catch(e => { console.error(e); process.exit(1); });
           END
