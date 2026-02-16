@@ -554,7 +554,15 @@ UTEX.DDS = {
 
         DDSCAPS_COMPLEX: 0x8,
         DDSCAPS_MIPMAP: 0x400000,
-        DDSCAPS_TEXTURE: 0x1000
+        DDSCAPS_TEXTURE: 0x1000,
+
+        DDSCAPS2_CUBEMAP: 0x200,           // caps2 flags for cubemaps
+        DDSCAPS2_CUBEMAP_POSITIVEX: 0x400,
+        DDSCAPS2_CUBEMAP_NEGATIVEX: 0x800,
+        DDSCAPS2_CUBEMAP_POSITIVEY: 0x1000,
+        DDSCAPS2_CUBEMAP_NEGATIVEY: 0x2000,
+        DDSCAPS2_CUBEMAP_POSITIVEZ: 0x4000,
+        DDSCAPS2_CUBEMAP_NEGATIVEZ: 0x8000
     },
 
     decode: function(buff) {
@@ -804,3 +812,30 @@ UTEX.PVR = {
 module.exports = function(buffer) {
     return UTEX.DDS.decode(buffer)[0];
 };
+
+module.exports.UTEX = UTEX;
+module.exports.readDDSHeader = UTEX.DDS.readHeader;
+module.exports.DDS_CONSTANTS = UTEX.DDS.C;
+
+module.exports.DDS_FORMATS = {
+    DXT1: "DXT1",
+    DXT3: "DXT3",
+    DXT5: "DXT5",
+    DX10: "DX10",
+    ATC: "ATC ",
+    ATCA: "ATCA",
+    ATCI: "ATCI"
+};
+
+module.exports.DDS_SIZES = {
+    MAGIC: 4,
+    HEADER: 124,
+    DX10_HEADER: 20
+};
+
+module.exports.DDS_HEADER_OFFSETS = {
+    MIPMAP_COUNT: 28,
+    CAPS: 108,
+    CAPS2: 112
+};
+

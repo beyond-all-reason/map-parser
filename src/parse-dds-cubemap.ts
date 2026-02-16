@@ -1,22 +1,49 @@
 import Jimp from "jimp";
 
 import { CubemapFaces } from "./cubemap-to-equirectangular";
-import parseDDS from "./utex.dds";
 
-interface DDSHeader {
-    flags: number;
-    height: number;
-    width: number;
-    pitch: number;
-    depth: number;
-    mmcount: number; // mipmap count
-    pixFormat: {
-        flags: number;
-        fourCC: string;
-        bitCount: number;
-    };
-    caps: number;
-    caps2: number;
+/* eslint-disable @typescript-eslint/no-require-imports */
+const parseDDS = require("./utex.dds");
+const { UTEX, readDDSHeader, DDS_CONSTANTS, DDS_FORMATS, DDS_SIZES, DDS_HEADER_OFFSETS } = require("./utex.dds");
+/* eslint-enable @typescript-eslint/no-require-imports */
+
+
+/**
+ * Validates that a buffer starts with the DDS magic number "DDS "
+ * @param data - Uint8Array to validate
+ * @param offset - Offset to check for magic number
+ * @throws Error if magic number is not found
+ */
+function validateDDSMagic(data: Uint8Array, offset: number): void {
+    const magic = UTEX.U.readASCII(data, offset, 4);
+    if (magic !== "DDS ") {
+        throw new Error("Invalid DDS file: missing DDS magic number");
+    }
+}
+
+/**
+ * Checks if a DDS file is a cubemap by examining its header
+ * @param buffer - Buffer containing the DDS file
+ * @returns true if the DDS file is a cubemap, false if it's a regular 2D texture
+ */
+export function isDDSCubemap(buffer: Buffer): boolean {
+    try {
+        const data = new Uint8Array(buffer);
+        let offset = 0;
+
+        // Check magic number using UTEX utility
+        validateDDSMagic(data, offset);
+        offset += DDS_SIZES.MAGIC;
+
+        // Read header using UTEX.DDS.readHeader
+        const header = readDDSHeader(data, offset);
+
+        // Check if cubemap flag is set
+        return (header.caps2 & DDS_CONSTANTS.DDSCAPS2_CUBEMAP) !== 0;
+    } catch (err) {
+        console.error("Error checking if DDS is cubemap:", err);
+        return false;
+    }
 }
 
 /**
@@ -30,20 +57,16 @@ export async function parseDDSCubemap(buffer: Buffer): Promise<CubemapFaces> {
     let offset = 0;
 
     // Check magic number
-    const magic = String.fromCharCode(data[0], data[1], data[2], data[3]);
-    if (magic !== "DDS ") {
-        throw new Error("Invalid DDS file: missing DDS magic number");
-    }
-    offset += 4;
+    validateDDSMagic(data, offset);
+    offset += DDS_SIZES.MAGIC;
 
     // Read header (124 bytes)
     const header = readDDSHeader(data, offset);
-    offset += 124;
+    offset += DDS_SIZES.HEADER;
 
     // Check if DX10 header exists
-    const DDPF_FOURCC = 0x4;
-    if ((header.pixFormat.flags & DDPF_FOURCC) && header.pixFormat.fourCC === "DX10") {
-        offset += 20; // Skip DX10 header
+    if ((header.pixFormat.flags & DDS_CONSTANTS.DDPF_FOURCC) && header.pixFormat.fourCC === DDS_FORMATS.DX10) {
+        offset += DDS_SIZES.DX10_HEADER;
     }
 
     const faceWidth = header.width;
@@ -58,13 +81,12 @@ export async function parseDDSCubemap(buffer: Buffer): Promise<CubemapFaces> {
     // Create a modified header with no mipmaps for parsing individual faces
     const modifiedHeader = Buffer.from(buffer.slice(0, 128));
     // Set mipmap count to 0 at offset 28 (after 4 byte magic)
-    modifiedHeader.writeUInt32LE(0, 28);
-    // Clear cubemap flags from caps (offset 108 after magic)
-    // DDSCAPS_COMPLEX = 0x8, DDSCAPS_MIPMAP = 0x400000, DDSCAPS_TEXTURE = 0x1000
-    const simpleCaps = 0x1000; // Just DDSCAPS_TEXTURE
-    modifiedHeader.writeUInt32LE(simpleCaps, 108);
-    // Clear caps2 (offset 112 after magic) - remove all cubemap flags
-    modifiedHeader.writeUInt32LE(0, 112);
+    modifiedHeader.writeUInt32LE(0, DDS_HEADER_OFFSETS.MIPMAP_COUNT);
+    // Clear cubemap flags from caps
+    const simpleCaps = DDS_CONSTANTS.DDSCAPS_TEXTURE;
+    modifiedHeader.writeUInt32LE(simpleCaps, DDS_HEADER_OFFSETS.CAPS);
+    // Clear caps2 - remove all cubemap flags
+    modifiedHeader.writeUInt32LE(0, DDS_HEADER_OFFSETS.CAPS2);
 
     const faces: Jimp[] = [];
 
@@ -105,51 +127,6 @@ export async function parseDDSCubemap(buffer: Buffer): Promise<CubemapFaces> {
     return faces as CubemapFaces;
 }
 
-/**
- * Reads DDS header from buffer
- */
-function readDDSHeader(data: Uint8Array, offset: number): DDSHeader {
-    const readUint32LE = (data: Uint8Array, offset: number): number => {
-        return data[offset] | (data[offset + 1] << 8) | (data[offset + 2] << 16) | (data[offset + 3] << 24);
-    };
-
-    offset += 4; // Skip size field (124)
-    const flags = readUint32LE(data, offset); offset += 4;
-    const height = readUint32LE(data, offset); offset += 4;
-    const width = readUint32LE(data, offset); offset += 4;
-    const pitch = readUint32LE(data, offset); offset += 4;
-    const depth = readUint32LE(data, offset); offset += 4;
-    const mmcount = readUint32LE(data, offset); offset += 4;
-
-    offset += 11 * 4; // Skip reserved fields
-
-    // Read pixel format (32 bytes)
-    offset += 4; // Skip pixel format size
-    const pfFlags = readUint32LE(data, offset); offset += 4;
-    const fourCC = String.fromCharCode(data[offset], data[offset + 1], data[offset + 2], data[offset + 3]);
-    offset += 4;
-    const bitCount = readUint32LE(data, offset); offset += 4;
-    offset += 16; // Skip RGBA masks
-
-    const caps = readUint32LE(data, offset); offset += 4;
-    const caps2 = readUint32LE(data, offset);
-
-    return {
-        flags,
-        height,
-        width,
-        pitch,
-        depth,
-        mmcount,
-        pixFormat: {
-            flags: pfFlags,
-            fourCC,
-            bitCount
-        },
-        caps,
-        caps2
-    };
-}
 
 /**
  * Calculates the total size of a mipmap chain for a texture
@@ -167,9 +144,9 @@ function calculateMipChainSize(
 
     // Determine block size based on format
     let blockSize = 0;
-    if (formatCode === "DXT1") {
+    if (formatCode === DDS_FORMATS.DXT1) {
         blockSize = 8;
-    } else if (formatCode === "DXT3" || formatCode === "DXT5") {
+    } else if (formatCode === DDS_FORMATS.DXT3 || formatCode === DDS_FORMATS.DXT5) {
         blockSize = 16;
     }
 
