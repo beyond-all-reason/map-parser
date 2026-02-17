@@ -14,8 +14,8 @@ import * as path from "path";
 
 import { BufferStream } from "./buffer-stream";
 import { cubemapToEquirectangular } from "./cubemap-to-equirectangular";
+import { CubemapFaces } from "./cubemap-to-equirectangular";
 import { defaultWaterOptions, MapInfo, SMD, SMF, SpringMap, WaterOptions } from "./map-model";
-import { isDDSCubemap, parseDDSCubemap } from "./parse-dds-cubemap";
 import { parseDxt } from "./parse-dxt";
 
 /* eslint-disable @typescript-eslint/no-require-imports */
@@ -600,67 +600,73 @@ export class MapParser {
         return resources;
     }
 
-    protected async parseSkybox(mapArchiveDir: string, skyboxPath: string, targetWidth: number = 4096): Promise<Jimp | undefined> {
+    protected async parseSkybox(mapArchiveDir: string, skyboxPath: string): Promise<Jimp> {
         if (this.config.verbose) {
             console.log(`Parsing skybox: ${skyboxPath}`);
         }
 
         const filename = path.join(mapArchiveDir, "maps", skyboxPath);
 
-        try {
-            if (!existsSync(filename)) {
-                console.warn(`Skybox file not found: ${filename}`);
-                return undefined;
+        if (!existsSync(filename)) {
+            throw new Error(`Skybox file not found: ${filename}`);
+        }
+
+        if (path.extname(filename) !== ".dds") {
+            throw new Error(`Skybox must be a .dds file, got: ${filename}`);
+        }
+
+        const skyboxBuffer = await fs.readFile(filename);
+
+        const results = parseDDS(skyboxBuffer);
+        const isCubemap = Array.isArray(results);
+
+        if (isCubemap) {
+            if (this.config.verbose) {
+                console.log("Skybox is a cubemap, converting to equirectangular");
             }
 
-            if (path.extname(filename) !== ".dds") {
-                console.warn(`Skybox must be a .dds file, got: ${filename}`);
-                return undefined;
+            if (results.length !== 6) {
+                throw new Error(`Expected 6 cubemap faces, got ${results.length}`);
             }
 
-            const skyboxBuffer = await fs.readFile(filename);
-
-            // Check if the DDS file is a cubemap or a regular 2D texture
-            const isCubemap = isDDSCubemap(skyboxBuffer);
-
-            if (isCubemap) {
-                if (this.config.verbose) {
-                    console.log("Skybox is a cubemap, converting to equirectangular");
-                }
-
-                // Parse the DDS cubemap into 6 faces
-                const faces = await parseDDSCubemap(skyboxBuffer);
-
-                // Convert cubemap to equirectangular projection (2:1 aspect ratio)
-                const equirectangular = cubemapToEquirectangular(faces, targetWidth);
-
-                if (this.config.verbose) {
-                    console.log(`Converted skybox to equirectangular ${equirectangular.getWidth()}x${equirectangular.getHeight()}`);
-                }
-
-                return equirectangular;
-            } else {
-                if (this.config.verbose) {
-                    console.log("Skybox is already a 2D texture");
-                }
-
-                // Parse as a regular 2D DDS texture
-                const decoded = parseDDS(skyboxBuffer);
-                const skybox = new Jimp({
-                    data: Buffer.from(decoded.image),
-                    width: decoded.width,
-                    height: decoded.height
+            // Convert each face to Jimp
+            const faces: CubemapFaces = results.map((face) => {
+                return new Jimp({
+                    data: Buffer.from(face.image),
+                    width: face.width,
+                    height: face.height
                 });
+            }) as CubemapFaces;
 
-                if (this.config.verbose) {
-                    console.log(`Loaded 2D skybox ${skybox.getWidth()}x${skybox.getHeight()}`);
-                }
+            // Use the native face size to determine output width (face size * 4 = width for 2:1 aspect ratio)
+            const faceSize = faces[0].getWidth();
+            const targetWidth = faceSize * 4;
 
-                return skybox;
+            // Convert cubemap to equirectangular projection (2:1 aspect ratio)
+            const equirectangular = cubemapToEquirectangular(faces, targetWidth);
+
+            if (this.config.verbose) {
+                console.log(`Converted skybox to equirectangular ${equirectangular.getWidth()}x${equirectangular.getHeight()}`);
             }
-        } catch (err) {
-            console.error(`Error parsing skybox: ${filename}`, err);
-            return undefined;
+
+            return equirectangular;
+        } else {
+            if (this.config.verbose) {
+                console.log("Skybox is already a 2D texture");
+            }
+
+            // Parse as a regular 2D DDS texture
+            const skybox = new Jimp({
+                data: Buffer.from(results.image),
+                width: results.width,
+                height: results.height
+            });
+
+            if (this.config.verbose) {
+                console.log(`Loaded 2D skybox ${skybox.getWidth()}x${skybox.getHeight()}`);
+            }
+
+            return skybox;
         }
     }
 

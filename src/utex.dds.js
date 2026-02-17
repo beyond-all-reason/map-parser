@@ -581,24 +581,30 @@ UTEX.DDS = {
         var w = head.width, h = head.height, out = [];
         var fmt = pf.fourCC, bc  = pf.bitCount;
 
+        // Check if this is a cubemap and determine face count
+        var isCubemap = (head.caps2 & C.DDSCAPS2_CUBEMAP) !== 0;
+        var faceCount = isCubemap ? 6 : 1;
+
         //var time = Date.now();
-        var mcnt = Math.max(1, head.mmcount);
-        for (var it=0; it<mcnt; it++) {
-            var img = new Uint8Array(w * h * 4);
+        for (var faceIdx = 0; faceIdx < faceCount; faceIdx++) {
+            var fw = w, fh = h;
+            var mcnt = Math.max(1, head.mmcount);
+            for (var it=0; it<mcnt; it++) {
+            var img = new Uint8Array(fw * fh * 4);
             if (false) {} else if (fmt==="DXT1") {
-                offset=UTEX.readBC1(data, offset, img, w, h);
+                offset=UTEX.readBC1(data, offset, img, fw, fh);
             } else if (fmt==="DXT3") {
-                offset=UTEX.readBC2(data, offset, img, w, h);
+                offset=UTEX.readBC2(data, offset, img, fw, fh);
             } else if (fmt==="DXT5") {
-                offset=UTEX.readBC3(data, offset, img, w, h);
+                offset=UTEX.readBC3(data, offset, img, fw, fh);
             } else if (fmt==="DX10") {
-                offset=UTEX.readBC7(data, offset, img, w, h);
+                offset=UTEX.readBC7(data, offset, img, fw, fh);
             } else if (fmt==="ATC ") {
-                offset=UTEX.readATC(data, offset, img, w, h);
+                offset=UTEX.readATC(data, offset, img, fw, fh);
             } else if (fmt==="ATCA") {
-                offset=UTEX.readATA(data, offset, img, w, h);
+                offset=UTEX.readATA(data, offset, img, fw, fh);
             } else if (fmt==="ATCI") {
-                offset=UTEX.readATA(data, offset, img, w, h);
+                offset=UTEX.readATA(data, offset, img, fw, fh);
             } else if ((pf.flags&C.DDPF_ALPHAPIXELS) && (pf.flags&C.DDPF_RGB)) {
                 if     (bc===32) {
                     for (var i=0; i<img.length; i++) {
@@ -627,7 +633,7 @@ UTEX.DDS = {
                         img[i+2] = data[idx+0];  // B
                         img[i+3] = 255;          // A (fully opaque)
                     }
-                    offset += (w * h * 3);
+                    offset += (fw * fh * 3);
                 } else if (bc===32) {
                     // 32-bit RGB (with unused alpha or padding)
                     for (var i=0; i<img.length; i+=4) {
@@ -653,8 +659,13 @@ UTEX.DDS = {
                 console.log("unknown texture format, head flags: ", head.flags.toString(2), "pixelFormat flags: ", pf.flags.toString(2));
                 throw "e";
             }
-            out.push({width: w, height: h, image: img.buffer});
-            w = (w>>1);  h = (h>>1);
+            // For cubemaps, only return the first mipmap level for each face
+            // For regular textures, only return the first mipmap level (backward compatibility)
+            if (it === 0) {
+                out.push({width: fw, height: fh, image: img.buffer});
+            }
+            fw = (fw>>1);  fh = (fh>>1);
+            }
         }
         //console.log(Date.now()-time);  throw "e";
         return out; //out.slice(0,1);
@@ -810,7 +821,10 @@ UTEX.PVR = {
 };
 
 module.exports = function(buffer) {
-    return UTEX.DDS.decode(buffer)[0];
+    var results = UTEX.DDS.decode(buffer);
+    // For cubemaps (6 faces) or textures with mipmaps, return all results
+    // For single textures, return just the first one for backward compatibility
+    return results.length === 1 ? results[0] : results;
 };
 
 module.exports.UTEX = UTEX;
