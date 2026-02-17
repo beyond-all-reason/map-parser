@@ -820,12 +820,7 @@ UTEX.PVR = {
     }
 };
 
-module.exports = function(buffer) {
-    var results = UTEX.DDS.decode(buffer);
-    // For cubemaps (6 faces) or textures with mipmaps, return all results
-    // For single textures, return just the first one for backward compatibility
-    return results.length === 1 ? results[0] : results;
-};
+module.exports = UTEX.DDS.decode;
 
 module.exports.UTEX = UTEX;
 module.exports.readDDSHeader = UTEX.DDS.readHeader;

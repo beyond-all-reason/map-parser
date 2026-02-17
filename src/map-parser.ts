@@ -575,7 +575,7 @@ export class MapParser {
                     resources[key] = await Jimp.read(filename);
                 } else if (path.extname(filename) === ".dds") {
                     const resourceBuffer = await fs.readFile(filename);
-                    const decodedDXT1 = parseDDS(resourceBuffer);
+                    const decodedDXT1 = parseDDS(resourceBuffer)[0];
                     resources[key] = new Jimp({
                         data: Buffer.from(decodedDXT1.image),
                         width: decodedDXT1.width,
