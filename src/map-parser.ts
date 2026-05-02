@@ -278,17 +278,22 @@ export class MapParser {
         bufferStream.destroy();
 
         const heightMapSize = (mapWidth+1) * (mapHeight+1);
-        const heightMapBuffer = smfBuffer.slice(heightMapIndex, heightMapIndex + heightMapSize * 2);
-        const largeHeightMapValues = new BufferStream(heightMapBuffer).readInts(heightMapSize, 2, true);
-        const heightMapValues: number[] = [];
-        const heightMapColors = largeHeightMapValues.map((val, i) => {
-            const percent = val / 65536; // 2 bytes
-            heightMapValues.push(percent);
+        const heightMapValues: number[] = new Array(heightMapSize);
+        const heightMapRgba = Buffer.alloc(heightMapSize * 4);
+        const rawHeights = smfBuffer.slice(heightMapIndex, heightMapIndex + heightMapSize * 2);
+        for (let i = 0; i < heightMapSize; i++) {
+            const val = rawHeights.readUInt16LE(i * 2);
+            const percent = val / 65536;
+            heightMapValues[i] = percent;
             const level = percent * 255;
-            return [level, level, level, 255];
-        });
+            const off = i * 4;
+            heightMapRgba[off] = level;
+            heightMapRgba[off + 1] = level;
+            heightMapRgba[off + 2] = level;
+            heightMapRgba[off + 3] = 255;
+        }
         const heightMap = new Jimp({
-            data: Buffer.from(heightMapColors.flat()),
+            data: heightMapRgba,
             width: mapWidth + 1,
             height: mapHeight + 1
         });
@@ -689,10 +694,14 @@ export class MapParser {
 }
 
 function singleChannelToQuadChannel(buffer: Buffer) : Buffer {
-    const outBuffer: number[] = [];
-    buffer.forEach(val => {
-        outBuffer.push(val, val, val, 255);
-    });
-
-    return Buffer.from(outBuffer);
+    const out = Buffer.alloc(buffer.length * 4);
+    for (let i = 0; i < buffer.length; i++) {
+        const val = buffer[i];
+        const off = i * 4;
+        out[off] = val;
+        out[off + 1] = val;
+        out[off + 2] = val;
+        out[off + 3] = 255;
+    }
+    return out;
 }
