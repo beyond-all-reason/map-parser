@@ -150,7 +150,11 @@ export class MapParser {
 
             let skybox: Jimp | undefined;
             if (this.config.parseSkybox && mapInfo?.atmosphere?.skyBox) {
-                skybox = await this.parseSkybox(tempArchiveDir, mapInfo.atmosphere.skyBox);
+                try {
+                    skybox = await this.parseSkybox(tempArchiveDir, mapInfo.atmosphere.skyBox);
+                } catch (err) {
+                    console.warn(`Error parsing skybox for "${mapInfo.atmosphere.skyBox}":`, err);
+                }
             }
 
             await this.cleanup(tempArchiveDir);
