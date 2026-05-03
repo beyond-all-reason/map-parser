@@ -150,7 +150,11 @@ export class MapParser {
 
             let skybox: Jimp | undefined;
             if (this.config.parseSkybox && mapInfo?.atmosphere?.skyBox) {
-                skybox = await this.parseSkybox(tempArchiveDir, mapInfo.atmosphere.skyBox);
+                try {
+                    skybox = await this.parseSkybox(tempArchiveDir, mapInfo.atmosphere.skyBox);
+                } catch (err) {
+                    console.warn(`Error parsing skybox for "${mapInfo.atmosphere.skyBox}":`, err);
+                }
             }
 
             await this.cleanup(tempArchiveDir);
@@ -362,41 +366,47 @@ export class MapParser {
         const dxt1Size = Math.pow(mipmapSize, 2) / 2;
         const rowLength = mipmapSize * 4;
 
-        const refTiles: Buffer[][] = [];
-        for (let i=0; i<numOfTiles; i++) {
+        // Decode reference tiles as flat RGBA buffers (read-only, shared by index)
+        const refTiles: Buffer[] = [];
+        for (let i = 0; i < numOfTiles; i++) {
             const dxt1 = bufferStream.read(680).slice(startIndex, startIndex + dxt1Size);
-            const refTileRGBABuffer = parseDxt(dxt1, mipmapSize, mipmapSize);
-            const refTile: Buffer[] = [];
-            for (let k=0; k<mipmapSize; k++) {
-                const pixelIndex = k * rowLength;
-                const refTileRow = refTileRGBABuffer.slice(pixelIndex, pixelIndex + rowLength);
-                refTile.push(refTileRow);
-            }
-            refTiles.push(refTile);
+            refTiles.push(parseDxt(dxt1, mipmapSize, mipmapSize));
         }
 
-        const tiles: Buffer[][] = [];
-        for (let i=0; i<tileIndexes.length; i++) {
-            const refTileIndex = tileIndexes[i];
-            const tile = this.cloneTile(refTiles[refTileIndex]);
-            tiles.push(tile);
+        // Pre-allocate output buffer and blit tiles directly into position
+        const tilesWide = mapWidthUnits * 32;
+        const tilesHigh = mapHeightUnits * 32;
+        const outputWidth = mipmapSize * tilesWide;
+        const outputHeight = mipmapSize * tilesHigh;
+        const outputStride = outputWidth * 4;
+        const output = Buffer.alloc(outputWidth * outputHeight * 4);
+
+        if (tileIndexes.length !== tilesWide * tilesHigh) {
+            throw new Error(`Tile index count mismatch: expected ${tilesWide * tilesHigh}, got ${tileIndexes.length}`);
         }
 
-        const tileStrips: Buffer[] = [];
-        for (let y=0; y<mapHeightUnits * 32; y++) {
-            const tileStrip: Buffer[][] = [];
-            for (let x=0; x<mapWidthUnits * 32; x++) {
-                const tile = tiles.shift()!;
-                tileStrip.push(tile);
+        for (let tileIdx = 0; tileIdx < tileIndexes.length; tileIdx++) {
+            const refIndex = tileIndexes[tileIdx];
+            if (refIndex < 0 || refIndex >= refTiles.length) {
+                throw new Error(`Tile index ${refIndex} out of range (0..${refTiles.length - 1}) at position ${tileIdx}`);
             }
-            const textureStrip = this.joinTilesHorizontally(tileStrip, mipmapSize);
-            tileStrips.push(textureStrip);
+            const refTile = refTiles[refIndex];
+            const tileX = tileIdx % tilesWide;
+            const tileY = Math.floor(tileIdx / tilesWide);
+            const destXByte = tileX * mipmapSize * 4;
+            const destYRow = tileY * mipmapSize;
+
+            for (let row = 0; row < mipmapSize; row++) {
+                const srcOffset = row * rowLength;
+                const destOffset = (destYRow + row) * outputStride + destXByte;
+                refTile.copy(output, destOffset, srcOffset, srcOffset + rowLength);
+            }
         }
 
         return new Jimp({
-            data: Buffer.concat(tileStrips),
-            width: mipmapSize * mapWidthUnits * 32,
-            height: mipmapSize * mapHeightUnits * 32
+            data: output,
+            width: outputWidth,
+            height: outputHeight
         }).background(0x000000);
     }
 
@@ -498,26 +508,6 @@ export class MapParser {
             maxHeight: obj.maxheight,
             startPositions
         };
-    }
-
-    protected cloneTile(tile: Buffer[]) : Buffer[] {
-        const clone: Buffer[] = [];
-        for (const row of tile) {
-            clone.push(Buffer.from(row));
-        }
-        return clone;
-    }
-
-    protected joinTilesHorizontally(tiles: Buffer[][], mipmapSize: 4 | 8 | 16 | 32) : Buffer {
-        const tileRows: Buffer[] = [];
-        for (let y=0; y<mipmapSize; y++) {
-            for (let x=0; x<tiles.length; x++) {
-                const row = tiles[x].shift()!;
-                tileRows.push(row);
-            }
-        }
-
-        return Buffer.concat(tileRows);
     }
 
     protected applyWater(options: WaterOptions) {
