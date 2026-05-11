@@ -65,6 +65,14 @@ export interface MapParserConfig {
      * @default undefined
      */
     resources?: string[];
+    /**
+     * Path to use as the temporary extraction directory. If not provided, a unique
+     * directory is created automatically under os.tmpdir(). When provided, the caller
+     * is responsible for ensuring uniqueness across concurrent parses of the same map.
+     * The directory is deleted by the parser after parsing completes.
+     * @default undefined
+     */
+    tmpDir?: string;
 }
 
 const mapParserDefaultConfig: Partial<MapParserConfig> = {
@@ -88,7 +96,7 @@ export class MapParser {
         const filePath = path.parse(mapFilePath);
         const fileName = filePath.name;
         const fileExt = filePath.ext;
-        const tempArchiveDir = path.join(os.tmpdir(), fileName);
+        const tempArchiveDir = this.config.tmpDir ?? await fs.mkdtemp(path.join(os.tmpdir(), `${fileName}-`));
 
         // register a named handler so we can remove only our listener later
         const sigintHandler = async () => this.sigint(tempArchiveDir);
